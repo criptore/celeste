@@ -1,6 +1,6 @@
 # Celeste HQ
 
-Une app de bureau qui montre, en 3D pixel art, un open space où travaillent tous les agents Claude Code lancés sur ce PC : chaque projet a ses bureaux, chaque agent a sa fiche (outils, tâche en cours, derniers changements, conversations), et le CEO (l'opérateur humain) valide les demandes.
+Une app de bureau qui montre, en 3D pixel art, tous les projets Claude Code de ce PC comme une entreprise : un bâtiment sur un seul étage où chaque projet a sa pièce (ou plusieurs), avec son manager (la session principale) et ses sous-agents. Quand un projet démarre ou reprend, sa pièce s'ajoute au bâtiment ou se rallume. Chaque agent a sa fiche (outils, tâche en cours, derniers changements, conversations), et le CEO (l'opérateur humain) valide les demandes.
 
 ## État
 
@@ -29,3 +29,5 @@ Claude Code (CLI / app desktop)
 | Outils accessibles | frontmatter `tools:` des agents (`.claude/agents/*.md`) + serveurs MCP configurés |
 | « Discute avec » | appel de l'outil Agent (parent → sous-agent) et son résultat |
 | Point d'exclamation, demande au CEO | Notification (demande de permission) |
+| Pièce d'un projet qui s'ajoute / se rallume | première session vue dans un nouveau dossier / session reprise dans un dossier connu |
+| Panneau « À retenir » | le bridge envoie les événements importants par lots à Claude Haiku (API) qui écrit un résumé de 2 à 4 lignes ; le journal brut reste consultable |
