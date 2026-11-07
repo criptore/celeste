@@ -30,4 +30,8 @@ Claude Code (CLI / app desktop)
 | « Discute avec » | appel de l'outil Agent (parent → sous-agent) et son résultat |
 | Point d'exclamation, demande au CEO | Notification (demande de permission) |
 | Pièce d'un projet qui s'ajoute / se rallume | première session vue dans un nouveau dossier / session reprise dans un dossier connu |
+| Le CEO se lève et va porter une tâche à un manager | tu envoies un message dans une session Claude Code (UserPromptSubmit) |
+| Un manager va porter une tâche à un agent | appel de l'outil Agent (création d'un sous-agent avec sa consigne) |
+| Un agent rend son rapport puis quitte le bâtiment | SubagentStop : le sous-agent a fini, son bureau disparaît |
+| Toilettes, cantine, café, réunion d'équipe | animations d'ambiance quand un agent attend (commande longue, inactivité) ; les discussions y sont inventées |
 | Panneau « À retenir » | le bridge envoie les événements importants par lots à Claude Haiku (API) qui écrit un résumé de 2 à 4 lignes ; le journal brut reste consultable |

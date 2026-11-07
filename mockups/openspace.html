@@ -135,6 +135,11 @@ body.sheet-open .camctl{right:calc(var(--sheet-w) + 32px)}
 .req{display:grid;gap:8px;padding:10px;border:2px dashed var(--warn);background:rgba(255,143,94,.08)}
 .req p{margin:0;font-size:13px;line-height:1.4}
 .req .row{display:flex;gap:8px;flex-wrap:wrap}
+.strow{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.give{display:flex;gap:6px}
+.give input{flex:1;min-width:0;font:inherit;font-size:13px;background:var(--panel-2);border:2px solid var(--line);color:var(--ink);padding:6px 8px}
+.give input:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
+.give-msg{font-size:12px;color:var(--warn);margin:0}
 
 .lbl{position:absolute;left:0;top:0;will-change:transform;white-space:nowrap}
 .tag{font-family:var(--f-display);font-size:12px;padding:2px 6px;background:rgba(20,21,42,.88);border:1px solid var(--line);color:var(--ink)}
@@ -285,7 +290,7 @@ renderer.shadowMap.type = THREE.BasicShadowMap;
 renderer.setClearColor(0x6fa257);
 const scene = new THREE.Scene();
 const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 1000);
-const view = {angle:Math.PI / 4, target:Math.PI / 4, zoom:1, zoomT:1, tx:15, tz:0, txT:15, tzT:0, offX:0};
+const view = {angle:Math.PI / 4, target:Math.PI / 4, zoom:1, zoomT:1, tx:20, tz:0, txT:20, tzT:0, offX:0, follow:null};
 let W = 1, H = 1, RW = 1, RH = 1, PX = 3;
 const CAM_R = 120, CAM_H = 92, SIN_E = CAM_H / Math.hypot(CAM_R, CAM_H);
 scene.add(new THREE.HemisphereLight(0xe8f2ff, 0x5e6b45, 0.68));
@@ -378,7 +383,7 @@ function windowOn(room, g, w, h, x, y, z, inward){
   [-w / 2, 0, w / 2].forEach(dx => rbox(room, g, 0.08, h, 0.08, fr, x + dx, y, z + inward * 0.17, {noCast:true}));
 }
 
-const door = {open:0, target:0, pivot:null};
+const door = {open:0, target:0, pivot:null, forceUntil:0};
 const corridorEnd = new THREE.Group(); scene.add(corridorEnd);
 box(corridorEnd, 0.2, LOW_H, 2, WC, 0, LOW_H / 2, 0, {noCast:true});
 box(corridorEnd, 0.24, 0.08, 2.04, CAP, 0, LOW_H + 0.04, 0, {noCast:true});
@@ -418,12 +423,14 @@ function makeRoom(opt){
   const isNewCol = !cols[col];
   const colInfo = ensureCol(col); if (opt.drop && isNewCol) colInfo.dropWith = r;
   const Z = v => s * (CW + v);
-  const color = project ? project.color : kind === 'ceo' ? '#ffcf5a' : '#8fb4d9';
+  const color = project ? project.color : ({ceo:'#ffcf5a', lobby:'#8fb4d9', facil:'#7cb8ff', dining:'#ff9f6e'})[kind];
   r.color = color;
   rbox(r, g, MOD_W, 0.3, MOD_D, '#3a3350', 0, -0.15, Z(MOD_D / 2), {noCast:true});
   let ftex;
   if (kind === 'ceo') ftex = tileTex('#7a5236', '#000000', 'wood');
   else if (kind === 'lobby') ftex = tileTex('#a8774f', '#000000', 'wood');
+  else if (kind === 'facil') ftex = tileTex('#d7e6f2', '#c4d8ea');
+  else if (kind === 'dining') ftex = tileTex('#f2d7b6', '#e8c69f');
   else ftex = tileTex(mix(color, '#f2eef8', .5), mix(color, '#f2eef8', .68));
   const fm = new THREE.MeshLambertMaterial({map:ftex}); fm.userData.base = new THREE.Color(0xffffff); r.mats.__floor = fm;
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(MOD_W, MOD_D), fm);
@@ -450,14 +457,18 @@ function makeRoom(opt){
     rbox(r, g, 0.24, 0.08, MOD_D + 0.04, color, u, LOW_H + 0.04, Z(MOD_D / 2), {noCast:true});
     const gl = new THREE.Mesh(BOX, glassMat); gl.scale.set(0.06, GL_H, MOD_D); gl.position.set(u, LOW_H + GL_H / 2, Z(MOD_D / 2)); g.add(gl);
   }
-  // corridor wall with a door in the middle
-  for (const side of [-1, 1]){
-    rbox(r, g, 4.2, LOW_H, 0.2, WC, side * 2.9, LOW_H / 2, Z(0.1), {noCast:true});
-    rbox(r, g, 4.24, 0.08, 0.24, color, side * 2.9, LOW_H + 0.04, Z(0.1), {noCast:true});
-    const gl = new THREE.Mesh(BOX, glassMat); gl.scale.set(4.2, GL_H, 0.06); gl.position.set(side * 2.9, LOW_H + GL_H / 2, Z(0.1)); g.add(gl);
-    rbox(r, g, 0.14, LOW_H + GL_H, 0.24, '#5d6a8f', side * 0.8, (LOW_H + GL_H) / 2, Z(0.1), {noCast:true});
-  }
-  rbox(r, g, 1.74, 0.14, 0.24, '#5d6a8f', 0, LOW_H + GL_H, Z(0.1), {noCast:true});
+  // corridor wall with one door per room (two for the split services room)
+  const doors = opt.doors || [0];
+  let from = -MOD_W / 2; const segs = [];
+  doors.forEach(d => { segs.push([from, d - 0.8]); from = d + 0.8; }); segs.push([from, MOD_W / 2]);
+  segs.forEach(([a, b]) => { const w = b - a, c = (a + b) / 2; if (w < 0.05) return;
+    rbox(r, g, w, LOW_H, 0.2, WC, c, LOW_H / 2, Z(0.1), {noCast:true});
+    rbox(r, g, w + 0.04, 0.08, 0.24, color, c, LOW_H + 0.04, Z(0.1), {noCast:true});
+    const gl = new THREE.Mesh(BOX, glassMat); gl.scale.set(w, GL_H, 0.06); gl.position.set(c, LOW_H + GL_H / 2, Z(0.1)); g.add(gl); });
+  doors.forEach(d => {
+    [-0.8, 0.8].forEach(o => rbox(r, g, 0.14, LOW_H + GL_H, 0.24, '#5d6a8f', d + o, (LOW_H + GL_H) / 2, Z(0.1), {noCast:true}));
+    rbox(r, g, 1.74, 0.14, 0.24, '#5d6a8f', d, LOW_H + GL_H, Z(0.1), {noCast:true});
+  });
 
   if (kind === 'project'){
     [[0, 2.4], [-3, 2.4], [3, 2.4], [0, 4.6], [-3, 4.6], [3, 4.6]].forEach(([u, v]) => r.slots.push(mkSlot(r, u, v, false)));
@@ -468,6 +479,8 @@ function makeRoom(opt){
     plant(r, -4.3, Z(MOD_D - 0.6), 1.0); plant(r, 4.3, Z(MOD_D - 0.6), 0.9);
     if (r.annex){ rbox(r, g, 2.0, 0.4, 0.8, shade(color, .6), 0, 0.22, Z(6.9)); rbox(r, g, 2.0, 0.5, 0.2, shade(color, .5), 0, 0.5, Z(7.3)); }
   } else if (kind === 'ceo') buildCeo(r, Z);
+  else if (kind === 'facil') buildFacil(r, Z);
+  else if (kind === 'dining') buildDining(r, Z);
   else buildLobby(r, Z);
   rooms.push(r);
   (opt.prebuilt || []).forEach(i => makeDesk(r.slots[i]));
@@ -516,6 +529,78 @@ function buildLobby(r, Z){
   rbox(r, g, 2.4, 1.0, 0.6, '#8fb4d9', 3.0, 0.5, Z(2.3)); rbox(r, g, 2.5, 0.08, 0.7, '#5d6a8f', 3.0, 1.04, Z(2.3));
   rbox(r, g, 0.5, 1.0, 0.5, '#e7e2f0', -4.3, 0.5, Z(1.0)); rbox(r, g, 0.36, 0.5, 0.36, '#7cb8ff', -4.3, 1.25, Z(1.0));
   plant(r, -4.3, Z(3.0), 1.1); plant(r, 4.3, Z(5.2), 1.0);
+}
+
+const frostMat = new THREE.MeshLambertMaterial({color:0xe8f4ff, transparent:true, opacity:0.55, depthWrite:false});
+function buildFacil(r, Z){            // left half: toilets, right half: meeting room
+  const g = r.g, s = r.s, X = r.cx;
+  r.signs = [{u:-2.5, text:'TOILETTES'}, {u:2.5, text:'SALLE DE RÉUNION'}];
+  const carpet = new THREE.Mesh(new THREE.PlaneGeometry(4.8, 7.8), new THREE.MeshLambertMaterial({map:tileTex('#8d86b8', '#958fc0')}));
+  carpet.rotation.x = -Math.PI / 2; carpet.position.set(2.5, 0.016, Z(4)); carpet.receiveShadow = true; g.add(carpet);
+  rbox(r, g, 0.2, 1.0, MOD_D, WC, 0, 0.5, Z(MOD_D / 2), {noCast:true});
+  const fr = new THREE.Mesh(BOX, frostMat); fr.scale.set(0.06, 1.1, MOD_D); fr.position.set(0, 1.55, Z(MOD_D / 2)); g.add(fr);
+  // two stalls with doors that open and close
+  r.stalls = [];
+  [-4.62, -2.9, -1.18].forEach(u => rbox(r, g, 0.08, 1.6, 1.6, '#9fb7d0', u, 0.8, Z(7.2)));
+  [-3.76, -2.04].forEach(cu => {
+    rbox(r, g, 0.44, 0.4, 0.5, '#f4f5fb', cu, 0.2, Z(7.45)); rbox(r, g, 0.5, 0.5, 0.18, '#f4f5fb', cu, 0.62, Z(7.8)); rbox(r, g, 0.46, 0.04, 0.52, '#dfe3ee', cu, 0.42, Z(7.45));
+    const pv = new THREE.Group(); pv.position.set(cu - 0.82, 0, Z(6.4)); g.add(pv);
+    rbox(r, pv, 1.6, 1.45, 0.06, '#6c8fb3', 0.8, 0.82, 0);
+    rbox(r, pv, 0.1, 0.12, 0.09, '#ff8f5e', 1.4, 0.95, 0);
+    const base = [[X - 2.5, s * CW], [X - 2.5, s * (CW + 0.8)], [X + cu, s * (CW + 0.8)]];
+    const frontPt = [X + cu, s * (CW + 5.6)], insidePt = [X + cu, s * (CW + 7.25)];
+    r.stalls.push({pivot:pv, open:0, target:0, busy:false,
+      front:{entry:[X - 2.5, 0], inner:[...base, frontPt], face:s < 0 ? Math.PI : 0},
+      inside:{entry:[X - 2.5, 0], inner:[...base, frontPt, insidePt], face:s < 0 ? 0 : Math.PI}});
+  });
+  rbox(r, g, 0.5, 0.85, 2.2, '#e7e2f0', -0.45, 0.425, Z(3.2));
+  [2.7, 3.7].forEach(v => { rbox(r, g, 0.34, 0.06, 0.4, '#bfe3ff', -0.45, 0.87, Z(v)); rbox(r, g, 0.06, 0.16, 0.06, '#9a9cb8', -0.6, 0.98, Z(v)); });
+  rbox(r, g, 0.04, 0.6, 2.0, '#d6efff', -0.13, 1.45, Z(3.2), {noCast:true});
+  r.sink = {entry:[X - 2.5, 0], inner:[[X - 2.5, s * CW], [X - 2.5, s * (CW + 0.8)], [X - 1.15, s * (CW + 0.8)], [X - 1.15, s * (CW + 3.2)]], face:Math.PI / 2};
+  // meeting room
+  rbox(r, g, 2.6, 0.08, 1.3, '#5a3a28', 2.5, 0.76, Z(4.5));
+  rbox(r, g, 0.14, 0.72, 0.14, '#3a2a20', 2.5, 0.36, Z(4.5));
+  rbox(r, g, 0.5, 0.04, 0.3, '#2a2d3e', 2.5, 0.82, Z(4.5));
+  r.meet = [];
+  [[1.7, 3.3, 1], [3.3, 3.3, 1], [1.7, 5.7, -1], [3.3, 5.7, -1]].forEach(([u, v, dir]) => {
+    rbox(r, g, 0.55, 0.1, 0.5, '#4a4f8a', u, 0.47, Z(v)); rbox(r, g, 0.55, 0.6, 0.1, '#3a3f78', u, 0.82, Z(v - dir * 0.3)); rbox(r, g, 0.08, 0.42, 0.08, '#2a2d3e', u, 0.21, Z(v));
+    r.meet.push({loc:{entry:[X + 2.5, 0], inner:[[X + 2.5, s * CW], [X + 2.5, s * (CW + 0.8)], [X + 4.4, s * (CW + 0.8)], [X + 4.4, s * (CW + v)], [X + u, s * (CW + v)]], face:(dir > 0) === (s < 0) ? Math.PI : 0}});
+  });
+  const wb = new THREE.Group(); wb.userData.n = [0, -s]; g.add(wb); walls.push(wb);
+  rbox(r, wb, 2.0, 1.0, 0.06, '#f4f5fb', 2.5, 1.65, Z(MOD_D - 0.02), {noCast:true});
+  [['#e05a5a', 2.1, 1.9, 0.9], ['#4a8fd6', 2.6, 1.65, 1.3], ['#5fae6e', 2.3, 1.4, 0.7]].forEach(([c, x, y, w]) => rbox(r, wb, w, 0.06, 0.02, c, x, y, Z(MOD_D - 0.06), {noCast:true}));
+  plant(r, 4.4, Z(7.4), 0.9);
+}
+function buildDining(r, Z){
+  const g = r.g, s = r.s, X = r.cx;
+  r.signs = [{u:0, text:'CANTINE'}];
+  r.seats = [];
+  [-2.2, 2.2].forEach(tu => {
+    rbox(r, g, 1.0, 0.08, 3.9, '#c89b6d', tu, 0.76, Z(4.5));
+    [[-0.4, 2.7], [0.4, 2.7], [-0.4, 6.3], [0.4, 6.3]].forEach(([du, v]) => rbox(r, g, 0.07, 0.72, 0.07, '#4a4560', tu + du, 0.36, Z(v)));
+    [-1, 1].forEach(side => {
+      const u = tu + side * 0.85;
+      rbox(r, g, 0.4, 0.44, 3.9, '#8a5a3c', u, 0.22, Z(4.5));
+      [3.2, 4.5, 5.8].forEach(v => {
+        const lane = Math.abs(u) < 2.2 ? 0 : Math.sign(u) * 4.2;
+        const plate = new THREE.Group(); plate.position.set(tu + side * 0.28, 0.8, Z(v)); g.add(plate);
+        box(plate, 0.34, 0.02, 0.34, '#f4f5fb', 0, 0, 0, {noCast:true});
+        box(plate, 0.16, 0.07, 0.16, ['#e0a040', '#7cc46a', '#e05a5a', '#f2d7a0'][Math.floor(Math.random() * 4)], 0, 0.045, 0, {noCast:true});
+        box(plate, 0.1, 0.14, 0.1, '#7cb8ff', 0, 0.07, 0.26, {noCast:true});
+        plate.visible = false;
+        r.seats.push({tu, v, plate, taken:false, loc:{entry:[X, 0], inner:[[X, s * CW], [X, s * (CW + 0.8)], [X + lane, s * (CW + 0.8)], [X + lane, s * (CW + v)], [X + u, s * (CW + v)]], face:side < 0 ? Math.PI / 2 : -Math.PI / 2}});
+      });
+    });
+  });
+  rbox(r, g, 5.6, 0.9, 0.7, '#e7e2f0', 0, 0.45, Z(7.6)); rbox(r, g, 5.64, 0.08, 0.74, '#7a7395', 0, 0.94, Z(7.6));
+  ['#e0a040', '#7cc46a', '#e05a5a', '#f2d7a0', '#c98a5a'].forEach((c, i) => rbox(r, g, 0.7, 0.12, 0.45, c, -2.2 + i * 1.1, 1.02, Z(7.55)));
+  rbox(r, g, 0.8, 1.7, 0.7, '#5a5fa0', 4.3, 0.85, Z(7.3));
+  const sc = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.45), new THREE.MeshBasicMaterial({color:0x7ff0d0}));
+  sc.position.set(4.3, 1.3, Z(7.3) - s * 0.36); if (s > 0) sc.rotation.y = Math.PI; g.add(sc);
+  const wb = new THREE.Group(); wb.userData.n = [0, -s]; g.add(wb); walls.push(wb);
+  rbox(r, wb, 2.2, 0.8, 0.06, '#2b2d3e', 0, 1.75, Z(MOD_D - 0.02), {noCast:true});
+  [[-0.5, 1.95, 0.9], [-0.3, 1.75, 1.3], [-0.6, 1.55, 0.8]].forEach(([x, y, w]) => rbox(r, wb, w, 0.06, 0.02, '#fffbea', x, y, Z(MOD_D - 0.06), {noCast:true}));
+  plant(r, -4.4, Z(7.4), 1.0);
 }
 
 /* ---------- desk slots ---------- */
@@ -705,10 +790,12 @@ const MEETINGS = [
 /* ---------- building layout ---------- */
 const ceoRoom = makeRoom({kind:'ceo', col:0, s:-1});
 const lobby = makeRoom({kind:'lobby', col:0, s:1});
-makeRoom({kind:'project', project:PROJECTS.celeste, col:1, s:-1});
-makeRoom({kind:'project', project:PROJECTS.vitrine, col:1, s:1});
-makeRoom({kind:'project', project:PROJECTS.discord, col:2, s:-1, prebuilt:[0, 1, 3, 6]});
-makeRoom({kind:'project', project:PROJECTS.scripts, col:2, s:1, prebuilt:[0, 6]});
+const facil = makeRoom({kind:'facil', col:1, s:-1, doors:[-2.5, 2.5]});
+const dining = makeRoom({kind:'dining', col:1, s:1});
+makeRoom({kind:'project', project:PROJECTS.celeste, col:2, s:-1});
+makeRoom({kind:'project', project:PROJECTS.vitrine, col:2, s:1});
+makeRoom({kind:'project', project:PROJECTS.discord, col:3, s:-1, prebuilt:[0, 1, 3, 6]});
+makeRoom({kind:'project', project:PROJECTS.scripts, col:3, s:1, prebuilt:[0, 6]});
 rooms.forEach(r => { if (r.project && r.project.state === 'paused'){ r.dim = r.dimT = 0.5; applyDim(r); } });
 const roomsOf = p => rooms.filter(r => r.project === p);
 function nextFreeSlot(){ for (let c = 1; c < 50; c++) for (const s of [-1, 1]) if (!rooms.some(r => r.col === c && r.s === s)) return [c, s]; }
@@ -750,7 +837,7 @@ function seatAgent(a, slot){
 const ceo = (() => {
   const look = {skin:'#f1c9a5', hairC:'#2b1d14', shirt:ROLES.ceo.shirt, pants:ROLES.ceo.pants, hair:'slick', acc:['tie'], accC:'#ffcf5a'};
   const {g, P} = makeChar(look); scene.add(g);
-  const c = {id:'ceo', name:'Toi', role:'ceo', look, g, P, t:0, seated:true, typing:false, moving:false, isCeo:true, headYaw:0, bubbleUntil:0,
+  const c = {id:'ceo', name:'Toi', role:'ceo', look, g, P, t:0, convo:[], seated:true, typing:false, moving:false, isCeo:true, headYaw:0, bubbleUntil:0,
     tagEl:lbl('tag'), bubbleEl:lbl('bubble'), alertEl:lbl('alert')};
   g.position.set(ceoRoom.cx, 0, -(CW + 5.3)); g.rotation.y = 0;
   g.traverse(o => { if (o.isMesh) o.userData.agent = c; });
@@ -760,6 +847,9 @@ const ceo = (() => {
 /* ---------- locations + routing (every room door opens on the corridor, z = 0) ---------- */
 const DOOR_OUT = {entry:[1.0, 0], inner:[[-0.9, 0]], face:Math.PI / 2};
 const CEO_SPOT = {entry:[ceoRoom.cx, 0], inner:[[ceoRoom.cx, -CW], [ceoRoom.cx, -(CW + 0.8)], [ceoRoom.cx, -(CW + 3.0)]], face:Math.PI};
+const CEO_SEAT = {entry:[ceoRoom.cx, 0], inner:[[ceoRoom.cx, -CW], [ceoRoom.cx, -(CW + 0.8)], [ceoRoom.cx + 1.6, -(CW + 0.8)], [ceoRoom.cx + 1.6, -(CW + 5.3)], [ceoRoom.cx, -(CW + 5.3)]], face:0};
+ceo.loc = CEO_SEAT; ceo.atDesk = true;
+const EXIT = {entry:[1.0, 0], inner:[[-0.9, 0], [-10, 0], [-10, 11.6], [-34, 11.6]], face:-Math.PI / 2};
 const L = lobby.cx;
 const COFFEE = {entry:[L, 0], inner:[[L, CW], [L, CW + 0.8], [L + 1.5, CW + 0.8], [L + 1.5, CW + 6.9]], face:0};
 const TABLE = [
@@ -876,6 +966,159 @@ function approve(a, ok){
   refreshStats(); renderSheet(); renderDigest(true);
 }
 
+/* ---------- life in the building: delegation, toilets, lunch, team meetings, departures ---------- */
+const TASKS = {
+  explore:['Trouve où sont gérées les erreurs réseau.', 'Liste les dépendances obsolètes.', 'Repère le code mort dans src/.'],
+  plan:   ['Propose un plan pour le cache.', 'Découpe la refonte en étapes.'],
+  review: ['Relis la PR du formulaire.', 'Vérifie la sécurité du login.'],
+  front:  ['Rends la barre de navigation responsive.', 'Ajoute les états de chargement.'],
+  test:   ['Couvre le cas « mot de passe oublié ».', 'Ajoute un test de non-régression.'],
+  back:   ['Ajoute la pagination à /invoices.', 'Optimise la requête des sessions.'],
+  docs:   ['Documente l’API publique.', 'Mets à jour le guide d’installation.'],
+  lead:   ['Prépare la prochaine version.'],
+};
+const CEO_TASKS = ['Ajoute un mode sombre.', 'Prépare une démo pour vendredi.', 'Corrige le bug de connexion signalé ce matin.', 'Écris les tests manquants de l’API.', 'Nettoie le README.'];
+const SMALLTALK = ['Quelqu’un a vu mes tokens ? J’en avais plein ce matin.', 'Le CEO a validé ma PR, je suis aux anges.', 'Tu crois qu’on aura des GPU pour Noël ?', 'J’ai rêvé d’un merge sans conflit.', 'Aujourd’hui : octets à la carbonara.', 'Moi je mange léger, je tourne sur Haiku.', 'Encore un test instable ce matin…', 'Le nouveau café est très asynchrone.', 'Mon contexte déborde, il me faut une sieste.', 'Vous avez vu la nouvelle pièce ? Elle est tombée du ciel.'];
+const REPLIES = ['Haha, trop vrai.', 'Ne m’en parle pas.', 'Pareil !', 'C’est clair.', 'Sérieux ?', 'Je note.'];
+const STANDUP = ['Hier : carto finie. Aujourd’hui : les tests.', 'Je bloque sur une migration.', 'Ma PR est prête pour relecture.', 'Rien de bloquant de mon côté.'];
+
+function setPaper(a, on){
+  if (!a.paper){ a.paper = box(a.P.armR, 0.26, 0.03, 0.34, '#fffbea', 0, -0.6, 0.14); box(a.paper, 0.7, 1.4, 0.06, '#7a7a9a', 0, 0.6, -0.1, {noCast:true}); a.paper.traverse(o => o.userData.agent = a); }
+  a.paper.visible = on; a.carry = on;
+}
+function goHome(a){
+  if (a.isCeo) walkTo(a, CEO_SEAT, () => { a.atDesk = true; a.seated = true; refreshSheet(a); });
+  else backToDesk(a);
+}
+function delegate(boss, target, task, fromCeo){
+  if (boss.isCeo) boss.atDesk = false; else boss.state = 'visit';
+  boss.busy = true; target.busy = true; setPaper(boss, true);
+  if (fromCeo) note(ceo, 'confie une tâche à ' + esc(target.name) + ' : « ' + esc(task) + ' »', 2, target.project);
+  else note(boss, 'délègue à ' + esc(target.name) + ' : « ' + esc(task) + ' »', 1);
+  refreshSheet(boss, target);
+  walkTo(boss, behind(target), () => {
+    let tries = 0;
+    const go = () => {
+      if (!(target.seated && target.slot && target.loc === target.slot.loc && !target.moving)){
+        if (++tries < 40){ later(0.5, go); return; }
+        setPaper(boss, false); boss.busy = false; target.busy = false; goHome(boss); return;
+      }
+      if (!boss.isCeo) boss.state = 'talk';
+      boss.lookAt = target; target.lookAt = boss; target.typing = false; if (!target.request) target.state = 'talk';
+      say(boss, (fromCeo ? 'Nouvelle mission : ' : 'Nouvelle tâche : ') + task, 2.6);
+      convo(boss, target, task, true); convo(target, boss, task, false);
+      later(2.8, () => { setPaper(boss, false); setPaper(target, true); say(target, 'Reçu, je m’y mets !', 2);
+        target.task = task; target.progress = 0.05; refreshSheet(target); });
+      later(4.4, () => setPaper(target, false));
+      later(5, () => {
+        boss.lookAt = null; target.lookAt = null; target.busy = false; boss.busy = false;
+        if (target.state === 'talk'){ target.state = 'work'; target.typing = true; }
+        goHome(boss);
+        if (fromCeo && target.mgr) later(6, () => {        // the manager splits the work and hands part of it down
+          const subs = agents.filter(x => x.project === target.project && !x.mgr && x.state === 'work' && !x.busy && !x.moving);
+          if (subs.length && target.state === 'work' && !target.busy) delegate(target, pick(subs), 'Sous-tâche de « ' + task.replace(/\.$/, '') + ' »', false);
+        });
+      });
+    };
+    go();
+  });
+}
+function toilet(a){
+  const st = facil.stalls.find(x => !x.busy); if (!st) return;
+  st.busy = true; a.busy = true; a.state = 'visit';
+  note(a, 'fait une petite pause', 1);
+  walkTo(a, st.front, () => {
+    st.target = 1;
+    later(0.5, () => {
+      const pt = st.inside.inner[st.inside.inner.length - 1];
+      a.path = [pt]; a.dest = st.inside; a.moving = true;
+      a.onArrive = () => { a.state = 'wc'; st.target = 0;
+        later(4.5, () => { st.target = 1;
+          later(0.5, () => walkTo(a, facil.sink, () => { st.target = 0; st.busy = false; a.state = 'wash';
+            later(2, () => { a.busy = false; backToDesk(a); }); })); }); };
+    });
+  });
+}
+function chatter(members, n, done){
+  let t = 0.4;
+  for (let i = 0; i < n; i++){
+    const sp = members[i % members.length], line = i === 0 || Math.random() < .5 ? pick(SMALLTALK) : pick(REPLIES);
+    later(t, () => { say(sp, line, 2.4); const other = members[(i + 1) % members.length]; sp.lookAt = other; }); t += 2.7;
+  }
+  later(t, done);
+}
+function lunch(group){
+  let seats = [];
+  for (const tu of [-2.2, 2.2].sort(() => Math.random() - .5)){ const f = dining.seats.filter(x => x.tu === tu && !x.taken); if (f.length >= group.length){ seats = f; break; } }
+  if (!seats.length) return;
+  seats.sort((x, y) => x.v - y.v);
+  note(group[0], 'va déjeuner avec ' + group.slice(1).map(x => esc(x.name)).join(', '), 1);
+  let arrived = 0, started = false;
+  const start = () => { if (started) return; started = true;
+    chatter(group, 3 + group.length, () => group.forEach((m, i) => later(i * 0.7, () => {
+      m.lunchSeat.plate.visible = false; m.lunchSeat.taken = false; m.lunchSeat = null; m.lookAt = null; m.busy = false; backToDesk(m); }))); };
+  group.forEach((m, i) => {
+    const st = seats[i]; st.taken = true; m.lunchSeat = st; m.busy = true; m.state = 'visit';
+    walkTo(m, st.loc, () => { m.seated = true; m.state = 'eat'; st.plate.visible = true; if (++arrived === group.length) start(); });
+  });
+  later(25, start);
+}
+function teamMeeting(mgr, subs){
+  const members = [mgr, ...subs].slice(0, facil.meet.length);
+  facil.meetBusy = true;
+  note(mgr, 'réunit son équipe en salle de réunion', 1);
+  let arrived = 0, started = false;
+  const start = () => { if (started) return; started = true;
+    let t = 0.3;
+    const lines = [[mgr, 'Point d’équipe : on fait un tour de table.']].concat(members.slice(1).map(m => [m, pick(STANDUP)])).concat([[mgr, 'Merci, on continue comme ça.']]);
+    lines.forEach(([m, l]) => { later(t, () => { say(m, l, 2.4); members.forEach(o => { if (o !== m) o.lookAt = m; }); }); t += 2.7; });
+    later(t, () => { facil.meetBusy = false; members.forEach((m, i) => later(i * 0.6, () => { m.lookAt = null; m.busy = false; backToDesk(m); })); });
+  };
+  members.forEach((m, i) => { m.busy = true; m.state = 'visit';
+    walkTo(m, facil.meet[i].loc, () => { m.seated = true; m.state = 'meet'; if (++arrived === members.length) start(); }); });
+  later(25, start);
+}
+function removeAgent(a){
+  scene.remove(a.g); [a.tagEl, a.bubbleEl, a.alertEl].forEach(e => e.remove());
+  agents.splice(agents.indexOf(a), 1);
+  agents.forEach(x => { if (x.lookAt === a) x.lookAt = null; });
+  if (a.slot && a.slot.agent === a) a.slot.agent = null;
+  if (view.follow === a) view.follow = null;
+  if (selected === a) select(null);
+  refreshStats(); renderLegend(); if (sheetProject) renderSheet();
+}
+function finishAndLeave(a){
+  a.busy = true; a.state = 'visit';
+  const m = agents.find(x => x.name === a.parent && x.seated && x.state === 'work' && !x.busy);
+  const leave = () => {
+    a.state = 'leave'; a.lookAt = null;
+    note(a, 'a terminé sa mission et quitte le bureau', 2);
+    const sl = a.slot;
+    walkTo(a, EXIT, () => removeAgent(a));
+    later(1.5, () => { if (sl.desk){ sl.desk.vanish = 1; sl.desk = null; } });
+    refreshSheet(a);
+  };
+  if (!m){ leave(); return; }
+  m.busy = true;
+  walkTo(a, behind(m), () => {
+    a.lookAt = m; m.lookAt = a; m.typing = false;
+    say(a, 'Mission terminée, voici mon rapport.', 2.4); setPaper(a, true);
+    later(2.6, () => { setPaper(a, false); say(m, 'Merci, beau travail !', 2); });
+    later(4.6, () => { m.lookAt = null; m.busy = false; if (m.state === 'work') m.typing = true; leave(); });
+  });
+}
+const NAME_POOL = ['Vega', 'Juno', 'Byte', 'Pico', 'Flux', 'Iris', 'Onyx', 'Sol', 'Tide', 'Kilo', 'Neon', 'Zephyr', 'Cobalt', 'Lumen', 'Delta', 'Quartz'];
+let nameIdx = 0;
+function nextDef(){
+  const act = Object.values(PROJECTS).filter(p => p.state === 'active' && agents.some(a => a.project === p && a.mgr));
+  if (!act.length) return null;
+  const count = p => agents.filter(a => a.project === p).length;
+  const p = act.sort((x, y) => count(x) - count(y))[0];
+  const role = pick(['explore', 'plan', 'review', 'front', 'test', 'back', 'docs']);
+  let name; do { const k = nameIdx++; name = NAME_POOL[k % NAME_POOL.length] + (k >= NAME_POOL.length ? ' ' + (Math.floor(k / NAME_POOL.length) + 1) : ''); } while (agents.some(a => a.name === name));
+  return {name, role, project:p.key, model:role === 'explore' || role === 'docs' ? 'Haiku 5.5' : pick(['Sonnet 5.5', 'Opus 5.5']), parent:agents.find(a => a.project === p && a.mgr).name, task:pick(TASKS[role])};
+}
+
 /* ---------- arrivals: new project, resumed project, or an extra room ---------- */
 const QUEUE = [
   {name:'Nova',   role:'front',   project:'celeste',  model:'Sonnet 5.5', parent:'Atlas',  task:'Construit l’écran de connexion à partir du plan.'},
@@ -893,9 +1136,8 @@ function findSlot(p, mgr){
   return null;
 }
 function spawnNext(){
-  const def = QUEUE.shift();
+  const def = QUEUE.shift() || nextDef();
   if (!def) return;
-  if (!QUEUE.length) $('#btn-spawn').disabled = true;
   const p = PROJECTS[def.project];
   let slot = findSlot(p, !!def.mgr);
   if (p.state === 'none'){
@@ -923,7 +1165,7 @@ function spawnNext(){
   a.onArrive = () => {
     say(a, 'Toc toc !', 1.4, 'knock');
     later(1.3, () => {
-      door.target = 1; later(2.2, () => door.target = 0);
+      door.forceUntil = simT + 2;
       walkTo(a, slot.loc, () => {
         a.seated = true; a.typing = true; a.state = 'work'; arriving--;
         say(a, a.mgr ? 'Je prends la tête du projet.' : 'Bonjour ! Je m’installe.', 2.2);
@@ -966,13 +1208,15 @@ convo(agents[3], ceo, 'Je peux fusionner la PR auth dans main ?', true);
 /* ---------- room signs ---------- */
 const signs = [];
 function signFor(r){
-  const e = lbl('sign'); e.style.background = r.color;
-  e.addEventListener('click', () => { focusRoom(r, 1.4); if (r.project) openProject(r.project); else select(r.kind === 'ceo' ? ceo : null); });
-  signs.push({r, e});
+  (r.signs || [{u:0}]).forEach(sg => {
+    const e = lbl('sign'); e.style.background = r.color;
+    e.addEventListener('click', () => { focusRoom(r, 1.4); if (r.project) openProject(r.project); else if (r.kind === 'ceo') select(ceo); });
+    signs.push({r, e, u:sg.u, text:sg.text});
+  });
 }
 
 /* ---------- autonomous behaviour ---------- */
-let nextVisit = 4, nextReq = 50, nextSpawn = 8, nextCoffee = 16, nextMeet = 30;
+let nextVisit = 4, nextReq = 50, nextSpawn = 8, nextCoffee = 16, nextMeet = 30, nextWc = 10, nextLunch = 18, nextTeam = 20, nextDeleg = 5, nextCeoDeleg = 24, nextLeave = 60;
 function tickSim(dt){
   simT += dt;
   for (let i = timers.length - 1; i >= 0; i--) if (timers[i].at <= simT){ const t = timers.splice(i, 1)[0]; t.fn(); }
@@ -988,8 +1232,20 @@ function tickSim(dt){
     const leads = idle.filter(a => a.mgr); if (leads.length >= 2){ const x = pick(leads); meeting(x, pick(leads.filter(l => l !== x))); } }
   if ((nextReq -= dt) <= 0){ nextReq = 60 + Math.random() * 25;
     const cands = idle.filter(a => !a.request && a.mgr);
-    if (cands.length && agents.filter(x => x.request).length < 2){ const a = pick(cands), text = pick(REQUESTS); a.pending = true; askCeo(a, text); later(5.5, () => requestApproval(a, text)); } }
-  if ((nextSpawn -= dt) <= 0){ nextSpawn = 16 + Math.random() * 6; if (QUEUE.length && arriving === 0) spawnNext(); }
+    if (cands.length && ceo.atDesk && agents.filter(x => x.request).length < 2){ const a = pick(cands), text = pick(REQUESTS); a.pending = true; askCeo(a, text); later(5.5, () => requestApproval(a, text)); } }
+  if ((nextSpawn -= dt) <= 0){ nextSpawn = 16 + Math.random() * 6; if (agents.length < 20 && arriving === 0) spawnNext(); }
+  if ((nextWc -= dt) <= 0){ nextWc = 16 + Math.random() * 10; const a = pick(idle.filter(x => !x.mgr)); if (a) toilet(a); }
+  if ((nextLunch -= dt) <= 0){ nextLunch = 32 + Math.random() * 14;
+    const grp = idle.filter(x => !x.request).sort(() => Math.random() - .5).slice(0, 2 + Math.floor(Math.random() * 3)); if (grp.length >= 2) lunch(grp); }
+  if ((nextTeam -= dt) <= 0){ nextTeam = 40 + Math.random() * 15;
+    if (!facil.meetBusy){ const m = pick(idle.filter(x => x.mgr && !x.request)); if (m){ const subs = idle.filter(x => x.project === m.project && !x.mgr).slice(0, 3); if (subs.length >= 1) teamMeeting(m, subs); } } }
+  if ((nextDeleg -= dt) <= 0){ nextDeleg = 11 + Math.random() * 8;
+    const m = pick(idle.filter(x => x.mgr && !x.request));
+    if (m){ const t = pick(agents.filter(x => x.project === m.project && !x.mgr && x.state === 'work' && !x.busy && !x.moving)); if (t) delegate(m, t, pick(TASKS[t.role]), false); } }
+  if ((nextCeoDeleg -= dt) <= 0){ nextCeoDeleg = 45 + Math.random() * 20;
+    if (ceo.atDesk && !ceo.lookAt){ const m = pick(idle.filter(x => x.mgr && !x.request)); if (m) delegate(ceo, m, pick(CEO_TASKS), true); } }
+  if ((nextLeave -= dt) <= 0){ nextLeave = 40 + Math.random() * 20;
+    const a = pick(idle.filter(x => !x.mgr && !x.request && x.progress > .4)); if (a && agents.length > 10) finishAndLeave(a); }
 }
 
 /* ---------- per-frame character animation ---------- */
@@ -1010,15 +1266,18 @@ function animateChar(a, dt){
   else a.headYaw = lerp(a.headYaw, 0, dt * 5);
   const k = Math.min(1, dt * 14);
   let lL = 0, lR = 0, aL = 0, aR = 0, hx = 0, y = 0;
-  if (a.moving){ const s = Math.sin(a.t * 11); lL = s * .6; lR = -s * .6; aL = -s * .5; aR = s * .5; y = Math.abs(Math.cos(a.t * 11)) * .05; }
+  if (a.moving){ const s = Math.sin(a.t * 11); lL = s * .6; lR = -s * .6; aL = -s * .5; aR = a.carry ? -0.85 : s * .5; y = Math.abs(Math.cos(a.t * 11)) * .05; }
   else if (a.seated){
     lL = lR = -Math.PI / 2; y = -0.14;
     if (a.typing){ aL = -1.25 + Math.sin(a.t * 21) * .14; aR = -1.25 + Math.sin(a.t * 21 + 1.9) * .14; hx = .14 + Math.sin(a.t * 1.7) * .03; }
     else if (a.state === 'wait'){ aL = aR = -0.45; hx = -0.05 + Math.sin(a.t * 2) * .04; }
+    else if (a.state === 'eat'){ aL = -0.7; aR = -1.0 + Math.sin(a.t * 4) * .3; }
     else aL = aR = -0.5;
     if (a.talking) aR = -0.9 + Math.sin(a.t * 7) * .3;
   } else {
     if (a.talking){ aR = -0.7 + Math.sin(a.t * 6) * .35; aL = -0.2; }
+    else if (a.carry) aR = -0.7;
+    else if (a.state === 'wash'){ aL = aR = -1.0 + Math.sin(a.t * 9) * .15; }
     y = Math.sin(a.t * 2) * .01;
   }
   P.legL.rotation.x = lerp(P.legL.rotation.x, lL, k); P.legR.rotation.x = lerp(P.legR.rotation.x, lR, k);
@@ -1031,7 +1290,7 @@ function animateChar(a, dt){
 let frustW = 1;
 function resize(){
   W = app.clientWidth; H = app.clientHeight;
-  const aspect = W / H, fitH = Math.max(20, 46 / aspect);
+  const aspect = W / H, fitH = Math.max(20, 52 / aspect);
   cam.left = -fitH * aspect / 2; cam.right = fitH * aspect / 2; cam.top = fitH / 2; cam.bottom = -fitH / 2;
   frustW = fitH * aspect;
   PX = 0; updatePixelSize(); mResize();
@@ -1079,7 +1338,7 @@ canvas.addEventListener('pointermove', e => {
         view.txT += -Math.cos(a) * dx * upp - Math.sin(a) * dy * upp / SIN_E;
         view.tzT += Math.sin(a) * dx * upp - Math.cos(a) * dy * upp / SIN_E;
         view.txT = clamp(view.txT, -8, nCols * MOD_W + 8); view.tzT = clamp(view.tzT, -12, 12);
-        view.tx = view.txT; view.tz = view.tzT;
+        view.tx = view.txT; view.tz = view.tzT; view.follow = null;
       }
     }
     return;
@@ -1104,6 +1363,7 @@ window.addEventListener('keydown', e => { if (e.target && e.target.closest && e.
 const ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.56, 12), new THREE.MeshBasicMaterial({color:0xffcf5a, side:THREE.DoubleSide}));
 ring.rotation.x = -Math.PI / 2; ring.position.y = 0.04; ring.visible = false; scene.add(ring);
 function select(a){
+  if (view.follow !== a) view.follow = null;
   selected = a; sheetProject = null;
   document.body.classList.toggle('sheet-open', !!a);
   $('#sheet').hidden = !a;
@@ -1135,9 +1395,14 @@ function portrait(a){
   return c;
 }
 function statusOf(a){
-  if (a.isCeo) return ['idle', 'Supervise ' + agents.length + ' agents'];
+  if (a.isCeo) return a.atDesk ? ['idle', 'Supervise ' + agents.length + ' agents'] : ['move', 'Va confier une tâche'];
   if (a.state === 'enter') return ['move', 'Arrive au bureau'];
+  if (a.state === 'leave') return ['move', 'Mission terminée, quitte le bureau'];
   if (a.request) return ['wait', 'Attend ta validation'];
+  if (a.carry) return ['move', 'Porte une tâche'];
+  if (a.state === 'meet') return ['talk', 'En réunion d’équipe'];
+  if (a.state === 'eat') return ['idle', 'À la cantine'];
+  if (a.state === 'wc' || a.state === 'wash') return ['idle', 'Petite pause'];
   if (a.state === 'talk') return ['talk', 'En discussion'];
   if (a.state === 'visit') return ['move', 'Se déplace'];
   if (a.state === 'work') return ['work', 'Au travail'];
@@ -1162,7 +1427,7 @@ function renderSheet(){
   } else {
     const [cls, label] = statusOf(a);
     html += '<div class="sh-head"><span id="pt"></span><div><h2>' + esc(a.name) + '</h2><p>' + esc(a.isCeo ? 'CEO · opérateur humain' : ROLES[a.role].label + (a.mgr ? ' de ' + a.project.name : '') + ' · ' + a.model) + '</p></div><button class="btn close" id="sh-close" aria-label="Fermer la fiche">✕</button></div>' +
-      '<span class="status ' + cls + '"><i class="dot" style="background:currentColor"></i>' + esc(label) + '</span>';
+      '<div class="strow"><span class="status ' + cls + '"><i class="dot" style="background:currentColor"></i>' + esc(label) + '</span><button class="btn" id="follow" type="button">' + (view.follow === a ? 'Ne plus suivre' : 'Suivre') + '</button></div>';
     if (a.isCeo){
       const reqs = agents.filter(x => x.request);
       html += '<div class="sec"><h3>Demandes en attente</h3>' + (reqs.length ? reqs.map(reqBlock).join('') : '<p class="empty">Aucune demande. Tout le monde avance.</p>') + '</div>';
@@ -1171,6 +1436,9 @@ function renderSheet(){
       html += '<div class="sec"><h3>Travaille sur</h3><p class="task">' + esc(a.task) + '</p><div class="bar"><i style="width:' + Math.round(a.progress * 100) + '%"></i></div>' +
         '<div class="meta"><span>' + Math.round(a.progress * 100) + ' % estimé</span><span>' + esc(a.project.name) + '</span></div></div>';
       if (a.request) html += reqBlock(a);
+      if (a.state !== 'leave' && a.state !== 'enter')
+        html += '<div class="sec"><h3>Confier une tâche</h3><form class="give" id="give"><input id="give-task" type="text" maxlength="90" autocomplete="off" placeholder="Ex. : ajoute un mode sombre" aria-label="Tâche à confier à ' + esc(a.name) + '"><button class="btn gold" type="submit">Envoyer</button></form>' +
+          '<p class="empty" id="give-help">Le CEO se lève et va lui porter la tâche.' + (a.mgr ? ' Le manager en redonne ensuite une partie à un de ses agents.' : '') + '</p></div>';
       const all = Array.from(new Set(ALL_TOOLS.concat(a.tools)));
       html += '<div class="sec"><h3>Outils' + (a.ro ? '<span class="ro">lecture seule</span>' : '') + '</h3><div class="tools">' +
         all.map(t => '<span class="tool' + (a.tools.includes(t) ? '' : ' off') + '">' + t + '</span>').join('') +
@@ -1188,7 +1456,19 @@ function renderSheet(){
         '<dt>Actif depuis</dt><dd>' + ago(a.started) + '</dd><dt>Tokens</dt><dd>' + a.tokens + ' k</dd></dl></div>';
     }
   }
-  s.innerHTML = html;
+  const prev = s.querySelector('#give-task'), keep = prev && s._for === (a || p) ? {v:prev.value, f:document.activeElement === prev, c:prev.selectionStart} : null;
+  const scroll = s._for === (a || p) ? s.scrollTop : 0;
+  s.innerHTML = html; s._for = a || p; s.scrollTop = scroll;
+  const nin = s.querySelector('#give-task');
+  if (keep && nin){ nin.value = keep.v; if (keep.f){ nin.focus(); try { nin.setSelectionRange(keep.c, keep.c); } catch (e) {} } }
+  const form = s.querySelector('#give');
+  if (form) form.addEventListener('submit', e => {
+    e.preventDefault();
+    const text = nin.value.trim(); if (!text) return;
+    if (!ceo.atDesk){ const h = s.querySelector('#give-help'); h.className = 'give-msg'; h.textContent = 'Le CEO est déjà en déplacement, réessaie dans un instant.'; return; }
+    nin.value = ''; delegate(ceo, a, /[.!?]$/.test(text) ? text : text + '.', true);
+  });
+  const fb = s.querySelector('#follow'); if (fb) fb.onclick = () => { view.follow = view.follow === a ? null : a; if (view.follow) view.zoomT = Math.max(view.zoomT, 1.6); renderSheet(); };
   const pt = s.querySelector('#pt'); if (pt) pt.replaceWith(portrait(a));
   s.querySelector('#sh-close').onclick = () => select(null);
   s.querySelectorAll('[data-ok]').forEach(b => b.onclick = () => approve(agents.find(x => x.id === b.dataset.ok), true));
@@ -1224,7 +1504,7 @@ function renderDigest(now){
   recent.forEach(e => { const k = e.project ? e.project.key : '_'; if (!byP.has(k)) byP.set(k, []); byP.get(k).push(e); });
   byP.forEach((evs, k) => {
     const p = PROJECTS[k];
-    const parts = Array.from(new Set(evs.slice(-3).map(e => (e.who.isCeo ? '' : esc(e.who.name) + ' ') + e.html.replace(/<\/?(code|b)>/g, ''))));
+    const parts = Array.from(new Set(evs.slice(-3).map(e => (e.who.isCeo ? 'le CEO ' : esc(e.who.name) + ' ') + e.html.replace(/<\/?(code|b)>/g, ''))));
     items.push({c:p ? p.color : '#a4a6ca', html:(p ? '<b>' + esc(p.name) + '</b> : ' : '') + parts.join(' ; ')});
   });
   if (items.length < 2) items.push({c:'#6fd6a0', html:agents.filter(a => a.state === 'work').length + ' agents travaillent normalement, rien d’autre à signaler.'});
@@ -1284,14 +1564,14 @@ function layout(items){
 function updateLabels(){
   const items = [];
   rooms.forEach(r => { if (!r.sign && r.drop >= 1){ signFor(r); r.sign = true; } });
-  signs.forEach(({r, e}) => {
+  signs.forEach(({r, e, u, text}) => {
     const p = r.project;
     const txt = p ? esc(p.name) + (r.annex ? ' · annexe' : '') + '<small>' + (p.state === 'paused' ? 'en pause · ' + esc(p.idle) : agents.filter(a => a.slot && a.slot.room === r).length + ' agents') + '</small>'
-      : r.kind === 'ceo' ? 'BUREAU DU CEO' : 'ACCUEIL · CAFÉT’';
+      : text || (r.kind === 'ceo' ? 'BUREAU DU CEO' : 'ACCUEIL · CAFÉT’');
     setLabel(e, txt, 'sign' + (p && p.state === 'paused' ? ' paused' : ''));
     const zBack = r.s * (CW + MOD_D), zFront = r.s * CW, sa = Math.sin(view.angle), ca = Math.cos(view.angle);
     const backFar = (zBack - zFront) * ca < 0;      // the far edge of the room seen from the camera
-    const [sx, sy] = toScreen(r.cx - sa * 0, backFar ? 2.9 : 2.2, backFar ? zBack : zFront, cam);
+    const [sx, sy] = toScreen(r.cx + u + sa * 0, backFar ? 2.9 : 2.2, backFar ? zBack : zFront, cam);
     items.push({el:e, x:sx, y:sy, prio:100});
   });
   [ceo, ...agents].forEach(a => {
@@ -1333,6 +1613,9 @@ function frame(now){
   view.tx = lerp(view.tx, view.txT, Math.min(1, dt * 4)); view.tz = lerp(view.tz, view.tzT, Math.min(1, dt * 4));
   view.offX = lerp(view.offX, (document.body.classList.contains('sheet-open') && W > 860) ? 190 : 0, Math.min(1, dt * 6));
   updatePixelSize();
+  door.target = (simT < door.forceUntil || [ceo, ...agents].some(a => a.moving && Math.abs(a.g.position.z) < 1.3 && a.g.position.x > -0.6 && a.g.position.x < 2.4)) ? 1 : 0;
+  rooms.forEach(r => r.stalls && r.stalls.forEach(st => { st.open = lerp(st.open, st.target, Math.min(1, dt * 8)); st.pivot.rotation.y = st.open * r.s * 1.3; }));
+  if (view.follow){ view.txT = view.follow.g.position.x; view.tzT = view.follow.g.position.z; }
   door.open = lerp(door.open, door.target, Math.min(1, dt * 6)); if (door.pivot) door.pivot.rotation.y = door.open * Math.PI * 0.46;
   rooms.forEach(r => {
     if (r.drop < 1){
@@ -1351,9 +1634,14 @@ function frame(now){
     }
   });
   agents.forEach(a => animateChar(a, dt));
-  ceo.typing = !ceo.lookAt && !ceo.talking; ceo.seated = true; animateChar(ceo, dt);
+  if (ceo.atDesk){ ceo.seated = true; ceo.typing = !ceo.lookAt && !ceo.talking; }
+  animateChar(ceo, dt);
   screenAcc += dt; const doScreens = screenAcc > 0.22; if (doScreens) screenAcc = 0;
+  for (let i = desks.length - 1; i >= 0; i--){ const d = desks[i]; if (d.vanish == null) continue;
+    d.vanish -= dt * 2.5; const k = Math.max(0.001, d.vanish); d.g.scale.set(k, k, k);
+    if (d.vanish <= 0){ d.g.parent.remove(d.g); const r = d.slot.room; r.screens.splice(r.screens.indexOf(d.scrMat), 1); desks.splice(i, 1); } }
   desks.forEach(d => {
+    if (d.vanish != null) return;
     if (d.appear < 1){ d.appear = Math.min(1, d.appear + dt * 2.2); const t = d.appear, s = t * (1 + Math.sin(t * Math.PI) * 0.25 * (1 - t)); d.g.scale.set(s, s, s); }
     if (doScreens){ const ag = d.slot.agent, typing = ag && ag.typing && !ag.moving;
       if (typing){ d.lines.push(newLine()); if (d.lines.length > 6) d.lines.shift(); drawScreen(d, true); } }
