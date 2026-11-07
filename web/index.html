@@ -1,0 +1,1529 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Celeste HQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: full-bleed 3D pixel-art company building on a sunny lot; HUD panels float over its edges.
+   Single deliberate look: dark game HUD over a daylight scene, colors set explicitly. */
+:root{
+  --void:#14152a;
+  --panel:#1d1f38;
+  --panel-2:#272a49;
+  --line:#3c4070;
+  --ink:#eeedf7;
+  --muted:#a4a6ca;
+  --gold:#ffcf5a;
+  --ok:#6fd6a0;
+  --warn:#ff8f5e;
+  --info:#7cb8ff;
+  --paper:#fffbea;
+  --paper-ink:#1b1a2e;
+  --f-display:"Pixelify Sans","Courier New",monospace;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  --sheet-w:360px;
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:#6fa257;color:var(--ink);font-family:var(--f-body);overflow:hidden}
+#app{position:relative;height:100%;overflow:hidden}
+#scene{position:absolute;inset:0;width:100%;height:100%;display:block;image-rendering:pixelated;touch-action:none;cursor:grab}
+#scene.hovering{cursor:pointer}
+#scene.dragging{cursor:grabbing}
+#labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+
+.px{background:var(--panel);border:2px solid var(--line);box-shadow:inset 0 0 0 2px var(--panel-2),4px 4px 0 rgba(0,0,0,.35)}
+button{font:inherit;color:inherit}
+.btn{font-family:var(--f-display);font-size:14px;background:var(--panel-2);border:2px solid var(--line);padding:6px 10px;cursor:pointer;box-shadow:2px 2px 0 rgba(0,0,0,.4);line-height:1}
+.btn:hover{border-color:var(--muted)}
+.btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 rgba(0,0,0,.4)}
+.btn:focus-visible,.tab:focus-visible,.proj:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.gold{background:var(--gold);color:#2a1d00;border-color:#b8902c}
+.btn.ok{background:var(--ok);color:#0d2a1c;border-color:#3d9a6c}
+
+.topbar{position:absolute;top:0;left:0;right:0;display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;
+  padding-block:12px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));pointer-events:none}
+.topbar>*{pointer-events:auto}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto;padding:6px 10px 6px 6px}
+.brand canvas{width:32px;height:32px;image-rendering:pixelated}
+.brand b{display:block;font-family:var(--f-display);font-size:20px;letter-spacing:.06em;font-weight:700}
+.brand small{display:block;font-size:11px;color:var(--muted);letter-spacing:.04em}
+.tabs{display:flex}
+.tab{font-family:var(--f-display);font-size:14px;padding:7px 12px;background:var(--panel);border:2px solid var(--line);cursor:pointer;color:var(--muted)}
+.tab+.tab{border-left:0}
+.tab.on{background:var(--panel-2);color:var(--ink);box-shadow:inset 0 -3px 0 var(--gold)}
+.stats{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.chip{font-family:var(--f-display);font-size:13px;display:inline-flex;align-items:center;gap:6px;padding:5px 8px;background:var(--panel);border:2px solid var(--line);font-variant-numeric:tabular-nums}
+.chip.warn{border-color:#8a4f37}
+.dot{width:8px;height:8px;display:inline-block;background:var(--muted);flex:none}
+.dot.ok{background:var(--ok)}
+.dot.warn{background:var(--warn);animation:blink 1s steps(2) infinite}
+.conn .dot{background:var(--ok)}
+.conn.off .dot{background:var(--warn)}
+.conn.off{color:var(--warn)}
+@keyframes blink{50%{opacity:.2}}
+
+.legend{position:absolute;left:max(16px,env(safe-area-inset-left,0px));top:84px;width:244px;padding:12px;display:grid;gap:8px}
+h3{font-family:var(--f-display);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0;font-weight:500}
+.projs{display:grid;gap:2px}
+.proj{display:grid;grid-template-columns:14px 1fr auto auto;gap:8px;align-items:center;font-size:13px;background:none;border:0;padding:5px 4px;cursor:pointer;text-align:left;width:100%}
+.proj:hover{background:var(--panel-2)}
+.proj i{width:14px;height:14px;display:block;box-shadow:inset 0 0 0 2px rgba(0,0,0,.25)}
+.proj span{font-family:var(--f-mono);font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.proj b{font-family:var(--f-display);font-weight:500;color:var(--muted);font-variant-numeric:tabular-nums}
+.pill{font-family:var(--f-display)!important;font-size:10px!important;letter-spacing:.04em;padding:1px 5px;border:1px solid currentColor}
+.pill.active{color:var(--ok)} .pill.paused{color:var(--muted)} .pill.new{color:var(--gold)}
+.toggle{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted);cursor:pointer;padding-top:6px;border-top:2px solid var(--panel-2)}
+.toggle input{accent-color:var(--gold)}
+.hint{font-size:11px;color:var(--muted);line-height:1.45;margin:0}
+
+.digest{position:absolute;left:max(16px,env(safe-area-inset-left,0px));bottom:max(16px,env(safe-area-inset-bottom,0px));width:min(400px,calc(100% - 32px));padding:12px;display:grid;gap:8px}
+.dg-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.by{font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+.by.busy::before{content:"";display:inline-block;width:6px;height:6px;background:var(--gold);margin-right:6px;animation:blink .5s steps(2) infinite}
+#digest{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+#digest li{display:grid;grid-template-columns:8px 1fr;gap:8px;font-size:13px;line-height:1.4}
+#digest li i{width:8px;height:8px;margin-top:6px}
+#digest li.hi{color:#ffd2bf}
+#digest b{font-weight:600}
+details{border-top:2px solid var(--panel-2);padding-top:6px}
+summary{font-size:12px;color:var(--muted);cursor:pointer;list-style:none;font-family:var(--f-display)}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"▸ "}
+details[open] summary::before{content:"▾ "}
+#feed{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:3px;max-height:150px;overflow:auto}
+#feed li{display:grid;grid-template-columns:auto 1fr;gap:8px;font-size:12px;line-height:1.35;min-width:0}
+#feed time{font-family:var(--f-mono);color:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
+#feed li div{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+code{font-family:var(--f-mono);font-size:11px;color:#c9cbf0}
+.add{color:var(--ok)} .del{color:#ff7a8a}
+
+.camctl{position:absolute;right:max(16px,env(safe-area-inset-right,0px));bottom:max(16px,env(safe-area-inset-bottom,0px));display:flex;gap:6px}
+body.sheet-open .camctl{right:calc(var(--sheet-w) + 32px)}
+.camctl .btn{width:38px;height:38px;padding:0;font-size:18px}
+
+.sheet{position:absolute;top:84px;right:max(16px,env(safe-area-inset-right,0px));width:var(--sheet-w);max-height:calc(100% - 100px);overflow:auto;padding:14px;display:grid;gap:14px;align-content:start}
+.sh-head{display:grid;grid-template-columns:64px 1fr auto;gap:12px;align-items:center}
+.sh-head canvas,.swatch{display:block;width:64px;height:64px;image-rendering:pixelated;border:2px solid var(--line)}
+.sh-head h2{font-family:var(--f-display);font-size:24px;margin:0;line-height:1;font-weight:700;overflow-wrap:anywhere}
+.sh-head p{margin:4px 0 0;font-size:12px;color:var(--muted)}
+.close{width:30px;height:30px;padding:0;font-size:16px;align-self:start}
+.status{display:inline-flex;align-items:center;gap:6px;font-family:var(--f-display);font-size:13px;padding:4px 8px;border:2px solid currentColor;width:max-content}
+.status.work{color:var(--ok)} .status.wait{color:var(--warn)} .status.talk{color:var(--info)} .status.move{color:var(--gold)} .status.idle{color:var(--muted)}
+.sec{display:grid;gap:6px}
+.task{font-size:14px;line-height:1.45;margin:0}
+.bar{height:8px;background:var(--panel-2);border:2px solid var(--line)}
+.bar i{display:block;height:100%;background:var(--ok)}
+.meta{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.tools{display:flex;flex-wrap:wrap;gap:5px}
+.tool{font-family:var(--f-mono);font-size:11px;padding:3px 6px;background:var(--panel-2);border:1px solid var(--line)}
+.tool.mcp{border-color:#6c5aa8;color:#d2c6ff}
+.tool.off{opacity:.38;text-decoration:line-through}
+.ro{font-family:var(--f-display);font-size:11px;color:var(--gold);margin-left:6px;letter-spacing:.04em}
+.changes{list-style:none;margin:0;padding:0;display:grid;gap:3px}
+.changes li{display:grid;grid-template-columns:1fr auto auto;gap:8px;font-family:var(--f-mono);font-size:12px;align-items:baseline;min-width:0}
+.changes li>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.changes time{color:var(--muted);font-size:10px}
+.empty{font-size:12px;color:var(--muted);margin:0}
+.convo{display:grid;gap:5px}
+.msg{font-size:12px;line-height:1.4;padding:6px 8px;background:var(--panel-2);border-left:3px solid var(--line)}
+.msg b{font-weight:600}
+.msg.me{border-left-color:var(--gold)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:12px;margin:0}
+.kv dt{color:var(--muted)} .kv dd{margin:0;font-family:var(--f-mono);min-width:0;overflow-wrap:anywhere}
+.link{background:none;border:0;padding:0;color:var(--info);cursor:pointer;text-decoration:underline;font-family:var(--f-mono);font-size:12px}
+.req{display:grid;gap:8px;padding:10px;border:2px dashed var(--warn);background:rgba(255,143,94,.08)}
+.req p{margin:0;font-size:13px;line-height:1.4}
+.req .row{display:flex;gap:8px;flex-wrap:wrap}
+.strow{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.give{display:flex;gap:6px}
+.give input{flex:1;min-width:0;font:inherit;font-size:13px;background:var(--panel-2);border:2px solid var(--line);color:var(--ink);padding:6px 8px}
+.give input:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
+.give-msg{font-size:12px;color:var(--warn);margin:0}
+
+.lbl{position:absolute;left:0;top:0;will-change:transform;white-space:nowrap}
+.tag{font-family:var(--f-display);font-size:12px;padding:2px 6px;background:rgba(20,21,42,.88);border:1px solid var(--line);color:var(--ink)}
+.tag.sel{border-color:var(--gold);color:var(--gold)}
+.tag em{font-style:normal;color:var(--muted);margin-left:4px}
+.bubble{font-family:var(--f-display);font-size:13px;line-height:1.25;padding:5px 8px;background:var(--paper);color:var(--paper-ink);border:2px solid var(--paper-ink);box-shadow:3px 3px 0 rgba(0,0,0,.3);max-width:200px;white-space:normal;width:max-content}
+.bubble.tool{background:#101225;color:#dfe0ff;border-color:#5a5fa0;font-family:var(--f-mono);font-size:11px}
+.bubble.tool b{color:var(--gold);font-weight:500;margin-right:5px}
+.bubble.knock{background:#ffe9a8}
+.alert{font-family:var(--f-display);font-weight:700;font-size:13px;width:18px;height:20px;display:grid;place-items:center;background:var(--warn);color:#2a0f00;border:2px solid #2a0f00}
+.sign{font-family:var(--f-display);font-size:13px;padding:3px 9px;color:#14152a;border:2px solid #14152a;box-shadow:3px 3px 0 rgba(0,0,0,.3);font-weight:700;letter-spacing:.03em;pointer-events:auto;cursor:pointer}
+.sign small{font-weight:400;margin-left:6px;opacity:.8}
+.sign.paused{background:#b3b1c6!important;color:#2a2940}
+.mlabel{text-align:center;font-family:var(--f-display);font-size:13px;line-height:1.3;color:#14152a;background:rgba(255,251,234,.92);padding:3px 6px;border:2px solid #14152a}
+.mlabel small{display:block;font-family:var(--f-mono);font-size:10px;color:#4b4a66}
+
+.mcap{position:absolute;left:50%;transform:translateX(-50%);bottom:max(16px,env(safe-area-inset-bottom,0px));width:min(720px,calc(100% - 32px));padding:12px 14px;display:grid;gap:8px}
+.mcap p{margin:0;font-size:13px;line-height:1.5}
+.mcap ul{margin:0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--muted)}
+.mcap li b{color:var(--ink);font-weight:600}
+
+body.models .legend,body.models .digest,body.models .sheet,body.models .camctl,body.models #st-wrap{display:none!important}
+body:not(.models) .mcap{display:none}
+
+@media (max-width:860px){
+  :root{--sheet-w:auto}
+  .legend{display:none}
+  .sheet{top:auto;left:max(16px,env(safe-area-inset-left,0px));right:max(16px,env(safe-area-inset-right,0px));bottom:max(16px,env(safe-area-inset-bottom,0px));max-height:55%;width:auto}
+  body.sheet-open .digest,body.sheet-open .camctl{display:none}
+  .camctl{bottom:auto;top:160px}
+  .brand small{display:none}
+  #digest li:nth-child(n+3){display:none}
+}
+@media (max-width:520px){
+  .stats .chip:nth-child(2){display:none}
+  .brand b{font-size:17px}
+}
+@media (prefers-reduced-motion:reduce){
+  .dot.warn,.by.busy::before{animation:none}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="scene" aria-label="Bâtiment de l'entreprise en 3D pixel art, avec une pièce par projet et les agents au travail"></canvas>
+  <div id="labels"></div>
+
+  <header class="topbar">
+    <div class="brand px">
+      <canvas id="logo" width="8" height="8" aria-hidden="true"></canvas>
+      <div><b>CELESTE HQ</b><small>Tes agents Claude Code, en direct</small></div>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Vue">
+      <button class="tab on" id="tab-office" role="tab" aria-selected="true">Entreprise</button>
+      <button class="tab" id="tab-models" role="tab" aria-selected="false">Personnages</button>
+    </nav>
+    <div class="stats" id="st-wrap">
+      <span class="chip"><i class="dot ok"></i><b id="st-active">0</b>&nbsp;agents</span>
+      <span class="chip"><b id="st-proj">0</b>&nbsp;projets actifs</span>
+      <span class="chip warn" id="st-wait-chip"><i class="dot warn"></i><b id="st-wait">0</b>&nbsp;en attente</span>
+      <span class="chip conn off" id="conn"><i class="dot"></i><span>connexion…</span></span>
+    </div>
+  </header>
+
+  <aside class="legend px" aria-label="Projets de l'entreprise">
+    <h3>Mes projets Claude Code</h3>
+    <div class="projs" id="proj-list"></div>
+    <label class="toggle"><input type="checkbox" id="names"> Afficher tous les noms</label>
+    <p class="hint">Chaque pièce est un projet, chaque personnage une session (manager) ou un sous-agent. Clique sur un projet pour y aller, sur un agent pour sa fiche. Glisse pour te déplacer, molette pour zoomer, ⟲ ⟳ (ou Q / E) pour tourner.</p>
+  </aside>
+
+  <section class="digest px" aria-label="Résumé des messages importants">
+    <div class="dg-head"><h3>À retenir</h3><span class="by" id="dg-by">en attente du serveur…</span></div>
+    <ul id="digest"></ul>
+    <details><summary>Journal complet (<span id="log-n">0</span>)</summary><label class="toggle"><input type="checkbox" id="feed-all"> Afficher chaque outil utilisé</label><ol id="feed"></ol></details>
+  </section>
+
+  <div class="camctl">
+    <button class="btn" id="rot-l" title="Tourner à gauche" aria-label="Tourner à gauche">⟲</button>
+    <button class="btn" id="rot-r" title="Tourner à droite" aria-label="Tourner à droite">⟳</button>
+    <button class="btn" id="zoom-out" title="Dézoomer" aria-label="Dézoomer">−</button>
+    <button class="btn" id="zoom-in" title="Zoomer" aria-label="Zoomer">+</button>
+  </div>
+
+  <aside class="sheet px" id="sheet" hidden></aside>
+
+  <section class="mcap px">
+    <h3>Personnages</h3>
+    <p>La tenue indique le métier de l'agent ; la couleur de la pièce indique le projet. Chaque projet a son manager (la session principale de Claude Code, avec le casque) et ses sous-agents. Le CEO, c'est toi : c'est vers toi que les managers viennent quand ils ont besoin d'une validation.</p>
+    <ul>
+      <li><b>Casque</b> manager</li>
+      <li><b>Casquette</b> exploration (lecture seule)</li>
+      <li><b>Lunettes</b> plan et relecture</li>
+      <li><b>Masque</b> tests</li>
+    </ul>
+  </section>
+</div>
+
+<script src="/three.min.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const app = $('#app'), canvas = $('#scene'), overlay = $('#labels');
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- helpers ---------- */
+function rng(seed){ return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+function lerpAngle(a, b, t){ let d = ((b - a + Math.PI) % (Math.PI * 2)) - Math.PI; if (d < -Math.PI) d += Math.PI * 2; return a + d * t; }
+const nowStr = () => new Date().toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function shade(hex, k){
+  const n = parseInt(hex.slice(1), 16), f = v => clamp(Math.round(v * k), 0, 255);
+  return '#' + [f(n >> 16), f(n >> 8 & 255), f(n & 255)].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+function mix(a, b, t){
+  const A = parseInt(a.slice(1), 16), B = parseInt(b.slice(1), 16);
+  return '#' + [16, 8, 0].map(s => Math.round(lerp(A >> s & 255, B >> s & 255, t)).toString(16).padStart(2, '0')).join('');
+}
+const MATS = {};
+function M(c){ return MATS[c] || (MATS[c] = new THREE.MeshLambertMaterial({color:c})); }
+const BOX = new THREE.BoxGeometry(1, 1, 1);
+function box(parent, w, h, d, c, x, y, z, opt){
+  const m = new THREE.Mesh(BOX, (opt && opt.mat) || M(c));
+  m.scale.set(w, h, d); m.position.set(x, y, z);
+  m.castShadow = !(opt && opt.noCast); m.receiveShadow = true;
+  parent.add(m); return m;
+}
+// crisp up close, mipmapped far away so floors don't shimmer when zooming or rotating
+function canvasTex(w, h, draw, repeat){
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d'); draw(g, w, h);
+  const t = new THREE.CanvasTexture(c);
+  t.magFilter = THREE.NearestFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true; t.anisotropy = 4;
+  if (repeat){ t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeat[0], repeat[1]); }
+  t.userData = {canvas:c, g};
+  return t;
+}
+function screenTex(w, h){ const t = canvasTex(w, h, () => {}); t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; return t; }
+
+/* ---------- renderer, camera, lights ---------- */
+const renderer = new THREE.WebGLRenderer({canvas, antialias:false});
+renderer.setPixelRatio(1);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.BasicShadowMap;
+renderer.setClearColor(0x6fa257);
+const scene = new THREE.Scene();
+const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 1000);
+const view = {angle:Math.PI / 4, target:Math.PI / 4, zoom:1, zoomT:1, tx:20, tz:0, txT:20, tzT:0, offX:0, follow:null};
+let W = 1, H = 1, RW = 1, RH = 1, PX = 3;
+const CAM_R = 120, CAM_H = 92, SIN_E = CAM_H / Math.hypot(CAM_R, CAM_H);
+scene.add(new THREE.HemisphereLight(0xe8f2ff, 0x5e6b45, 0.68));
+const sun = new THREE.DirectionalLight(0xfff2dc, 0.72);
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0015;
+Object.assign(sun.shadow.camera, {left:-34, right:34, top:34, bottom:-34, near:1, far:120});
+scene.add(sun); scene.add(sun.target);
+
+/* ---------- outdoors: grass, street, trees, cars ---------- */
+{
+  const grass = canvasTex(16, 16, (g, w, h) => {
+    const r = rng(5); g.fillStyle = '#6fa257'; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 60; i++){ g.fillStyle = ['#679a50', '#76aa5d', '#6a9f53', '#7cb062'][i % 4]; g.fillRect(Math.floor(r() * w), Math.floor(r() * h), 1 + Math.floor(r() * 2), 1); }
+    g.fillStyle = '#e8d870'; g.fillRect(3, 11, 1, 1); g.fillStyle = '#f2f2f2'; g.fillRect(12, 4, 1, 1);
+  }, [100, 100]);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshLambertMaterial({map:grass}));
+  ground.rotation.x = -Math.PI / 2; ground.position.set(30, -0.31, 0); ground.receiveShadow = true; scene.add(ground);
+  box(scene, 260, 0.04, 3.6, '#4a4b5c', 30, -0.29, 14.4, {noCast:true});
+  for (let x = -90; x < 150; x += 4) box(scene, 1.6, 0.05, 0.14, '#f0e6b0', x, -0.27, 14.4, {noCast:true});
+  box(scene, 260, 0.08, 1.6, '#c9c5d3', 30, -0.27, 11.6, {noCast:true});
+  box(scene, 10.6, 0.06, 1.8, '#c9c5d3', -5.3, -0.28, 0, {noCast:true});
+  box(scene, 1.8, 0.06, 11, '#c9c5d3', -10, -0.28, 5.5, {noCast:true});
+  const r = rng(21);
+  const tree = (x, z, s) => { const g = new THREE.Group(); g.position.set(x, -0.3, z); g.scale.setScalar(s); scene.add(g);
+    box(g, 0.4, 1.2, 0.4, '#7a5236', 0, 0.6, 0);
+    const c1 = ['#3f8f54', '#4c9d5a', '#3a7f4c'][Math.floor(r() * 3)];
+    box(g, 1.7, 1.2, 1.7, c1, 0, 1.7, 0); box(g, 1.2, 0.8, 1.2, shade(c1, 1.15), 0.1, 2.6, 0.05); };
+  const bush = (x, z) => { box(scene, 0.9, 0.6, 0.9, '#4c9d5a', x, 0, z); box(scene, 0.6, 0.4, 0.6, '#5cad66', x + 0.3, 0.25, z - 0.2); };
+  for (let i = 0; i < 140; i++){
+    const x = -60 + r() * 180, z = -60 + r() * 120, k = r(), s = r();
+    const inLot = x > -3 && x < 63 && z > -11.5 && z < 11;
+    const onStreet = z > 10 && z < 17;
+    const onPath = (x > -12 && x < 1 && Math.abs(z) < 2.2) || (Math.abs(x + 10) < 2 && z > -1 && z < 11);
+    if (inLot || onStreet || onPath) continue;
+    if (k < .7) tree(x, z, 0.8 + s * 0.5); else bush(x, z);
+  }
+  for (let x = -2; x < 64; x += 3.2) bush(x, -11.2);
+  for (let x = -8; x < 70; x += 12){ box(scene, 0.12, 2.6, 0.12, '#3b3d4f', x, 1.0, 12.3); box(scene, 0.5, 0.12, 0.3, '#3b3d4f', x, 2.3, 12.4); box(scene, 0.3, 0.06, 0.2, '#fff2b0', x, 2.22, 12.45); }
+}
+const cars = [];
+[['#e05a5a', 13.6, 1, -20], ['#4a8fd6', 15.2, -1, 40], ['#ffcf5a', 13.6, 1, 60]].forEach(([c, z, dir, x]) => {
+  const g = new THREE.Group(); g.position.set(x, -0.25, z); g.rotation.y = dir > 0 ? Math.PI / 2 : -Math.PI / 2; scene.add(g);
+  box(g, 1.1, 0.45, 2.2, c, 0, 0.42, 0); box(g, 0.95, 0.4, 1.2, shade(c, .85), 0, 0.85, -0.1);
+  box(g, 0.97, 0.3, 1.0, '#bfe3ff', 0, 0.86, -0.1, {noCast:true});
+  [[-0.5, 0.7], [0.5, 0.7], [-0.5, -0.7], [0.5, -0.7]].forEach(([a, b]) => box(g, 0.16, 0.34, 0.34, '#1b1a26', a, 0.2, b));
+  cars.push({g, dir, speed:3 + Math.random() * 2});
+});
+
+/* ---------- the building: one corridor along z = 0, rooms snap on both sides ---------- */
+const MOD_W = 10, MOD_D = 8, CW = 1;
+const WALL_H = 2.6, LOW_H = 0.8, GL_H = 1.3;
+const WC = '#e3dfec', CAP = '#8f87ab', BASE = '#5f577c';
+const walls = [], rooms = [], cols = {};
+const glassMat = new THREE.MeshLambertMaterial({color:0xbfe6ff, transparent:true, opacity:0.2, depthWrite:false});
+const skyTex = canvasTex(32, 18, (g, w, h) => {
+  const grad = g.createLinearGradient(0, 0, 0, h); grad.addColorStop(0, '#5aa7e8'); grad.addColorStop(1, '#bfe3ff');
+  g.fillStyle = grad; g.fillRect(0, 0, w, h);
+  g.fillStyle = '#ffffff'; [[4, 4, 7, 2], [6, 3, 3, 1], [19, 8, 8, 2], [21, 7, 4, 1]].forEach(([x, y, a, b]) => g.fillRect(x, y, a, b));
+  g.fillStyle = '#4c9d5a'; for (let x = 0; x < w; x += 3) g.fillRect(x, h - 3 - (x * 7 % 3), 3, 4);
+});
+const skyMat = new THREE.MeshBasicMaterial({map:skyTex});
+
+function tileTex(base, accent, pattern){
+  return canvasTex(MOD_W * 4, MOD_D * 4, (g, w, h) => {
+    const r = rng(base.length * 31 + accent.charCodeAt(1));
+    if (pattern === 'wood'){
+      const tones = [base, shade(base, .93), shade(base, 1.06)];
+      for (let row = 0; row < h / 2; row++){ let x = -Math.floor(r() * 8);
+        while (x < w){ const len = 6 + Math.floor(r() * 8); g.fillStyle = tones[Math.floor(r() * 3)]; g.fillRect(x, row * 2, len, 2); g.fillStyle = shade(base, .8); g.fillRect(x + len - 1, row * 2, 1, 2); x += len; } }
+      return;
+    }
+    for (let y = 0; y < h; y += 4) for (let x = 0; x < w; x += 4){
+      g.fillStyle = ((x + y) / 4) % 2 ? base : accent; g.fillRect(x, y, 4, 4);
+      g.fillStyle = shade(base, .88); g.fillRect(x, y + 3, 4, 1); g.fillRect(x + 3, y, 1, 4);
+    }
+  });
+}
+function RM(room, hex){
+  let m = room.mats[hex];
+  if (!m){ m = new THREE.MeshLambertMaterial({color:hex}); m.userData.base = new THREE.Color(hex); room.mats[hex] = m; }
+  return m;
+}
+const rbox = (room, parent, w, h, d, hex, x, y, z, opt) => box(parent, w, h, d, null, x, y, z, Object.assign({}, opt, {mat:RM(room, hex)}));
+function windowOn(room, g, w, h, x, y, z, inward){
+  const pane = new THREE.Mesh(new THREE.PlaneGeometry(w, h), skyMat);
+  pane.position.set(x, y, z + inward * 0.16); if (inward < 0) pane.rotation.y = Math.PI; g.add(pane);
+  const fr = '#4b4466';
+  rbox(room, g, w + 0.16, 0.1, 0.08, fr, x, y + h / 2, z + inward * 0.17, {noCast:true});
+  rbox(room, g, w + 0.24, 0.12, 0.2, fr, x, y - h / 2, z + inward * 0.2, {noCast:true});
+  [-w / 2, 0, w / 2].forEach(dx => rbox(room, g, 0.08, h, 0.08, fr, x + dx, y, z + inward * 0.17, {noCast:true}));
+}
+
+const door = {open:0, target:0, pivot:null, forceUntil:0};
+const corridorEnd = new THREE.Group(); scene.add(corridorEnd);
+box(corridorEnd, 0.2, LOW_H, 2, WC, 0, LOW_H / 2, 0, {noCast:true});
+box(corridorEnd, 0.24, 0.08, 2.04, CAP, 0, LOW_H + 0.04, 0, {noCast:true});
+{ const gl = new THREE.Mesh(BOX, glassMat); gl.scale.set(0.06, GL_H, 2); gl.position.y = LOW_H + GL_H / 2; corridorEnd.add(gl); }
+let nCols = 0;
+function ensureCol(col){
+  if (cols[col]) return cols[col];
+  const g = new THREE.Group(); g.position.x = col * MOD_W + MOD_W / 2; scene.add(g);
+  box(g, MOD_W, 0.3, 2 * CW, '#3a3350', 0, -0.15, 0, {noCast:true});
+  const f = new THREE.Mesh(new THREE.PlaneGeometry(MOD_W, 2 * CW), new THREE.MeshLambertMaterial({map:canvasTex(40, 8, (c, w, h) => {
+    for (let y = 0; y < h; y += 4) for (let x = 0; x < w; x += 4){ c.fillStyle = ((x + y) / 4) % 2 ? '#bdb8cf' : '#c9c5d9'; c.fillRect(x, y, 4, 4); c.fillStyle = '#a9a4bd'; c.fillRect(x, y + 3, 4, 1); c.fillRect(x + 3, y, 1, 4); }
+  })}));
+  f.rotation.x = -Math.PI / 2; f.position.y = 0.011; f.receiveShadow = true; g.add(f);
+  if (col === 0){
+    const ew = new THREE.Group(); ew.userData.n = [1, 0]; g.add(ew); walls.push(ew);
+    const x = -MOD_W / 2 - 0.15;
+    box(ew, 0.3, WALL_H, 0.4, WC, x, WALL_H / 2, -0.8, {noCast:true}); box(ew, 0.3, WALL_H, 0.4, WC, x, WALL_H / 2, 0.8, {noCast:true});
+    box(ew, 0.3, 0.6, 1.2, WC, x, WALL_H - 0.3, 0, {noCast:true});
+    box(ew, 0.36, 0.12, 2.06, CAP, x, WALL_H + 0.06, 0, {noCast:true});
+    box(ew, 0.4, 0.14, 1.3, '#4b4466', x, 2.0, 0, {noCast:true});
+    const pv = new THREE.Group(); pv.position.set(x + 0.05, 0, -0.6); ew.add(pv);
+    box(pv, 0.08, 1.94, 1.18, '#a0623e', 0, 0.97, 0.6); box(pv, 0.1, 0.08, 0.16, '#ffcf5a', 0.04, 0.95, 1.0); box(pv, 0.1, 0.3, 0.5, '#bfe3ff', 0.02, 1.5, 0.6);
+    door.pivot = pv;
+    box(g, 1.0, 0.03, 1.6, '#3b6e8f', -MOD_W / 2 + 0.7, 0.02, 0, {noCast:true});
+  }
+  cols[col] = {g, dropWith:null};
+  nCols = Math.max(nCols, col + 1);
+  corridorEnd.position.x = nCols * MOD_W + 0.1;
+  return cols[col];
+}
+
+function makeRoom(opt){
+  const {kind, col, s} = opt;
+  const project = opt.project || null;
+  const r = {kind, project, col, s, cx:col * MOD_W + MOD_W / 2, annex:!!opt.annex, mats:{}, slots:[], screens:[], dim:1, dimT:1, drop:opt.drop ? 0 : 1, flicker:0};
+  const g = new THREE.Group(); g.position.x = r.cx; scene.add(g); r.g = g;
+  const isNewCol = !cols[col];
+  const colInfo = ensureCol(col); if (opt.drop && isNewCol) colInfo.dropWith = r;
+  const Z = v => s * (CW + v);
+  const color = project ? project.color : ({ceo:'#ffcf5a', lobby:'#8fb4d9', facil:'#7cb8ff', dining:'#ff9f6e'})[kind];
+  r.color = color;
+  rbox(r, g, MOD_W, 0.3, MOD_D, '#3a3350', 0, -0.15, Z(MOD_D / 2), {noCast:true});
+  let ftex;
+  if (kind === 'ceo') ftex = tileTex('#7a5236', '#000000', 'wood');
+  else if (kind === 'lobby') ftex = tileTex('#a8774f', '#000000', 'wood');
+  else if (kind === 'facil') ftex = tileTex('#d7e6f2', '#c4d8ea');
+  else if (kind === 'dining') ftex = tileTex('#f2d7b6', '#e8c69f');
+  else ftex = tileTex(mix(color, '#f2eef8', .5), mix(color, '#f2eef8', .68));
+  const fm = new THREE.MeshLambertMaterial({map:ftex}); fm.userData.base = new THREE.Color(0xffffff); r.mats.__floor = fm;
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(MOD_W, MOD_D), fm);
+  floor.rotation.x = -Math.PI / 2; floor.position.set(0, 0.01, Z(MOD_D / 2)); floor.receiveShadow = true; g.add(floor);
+  // back (outer) wall
+  const bw = new THREE.Group(); bw.userData.n = [0, -s]; g.add(bw); walls.push(bw);
+  const bz = Z(MOD_D + 0.15);
+  rbox(r, bw, MOD_W + 0.2, WALL_H, 0.3, WC, 0, WALL_H / 2, bz, {noCast:true});
+  rbox(r, bw, MOD_W + 0.24, 0.12, 0.34, CAP, 0, WALL_H + 0.06, bz, {noCast:true});
+  rbox(r, bw, MOD_W + 0.24, 0.16, 0.34, BASE, 0, 0.08, bz, {noCast:true});
+  rbox(r, bw, MOD_W + 0.22, 0.14, 0.32, color, 0, 0.95, bz, {noCast:true});
+  windowOn(r, bw, 2.2, 1.1, -2.6, 1.7, bz, -s); windowOn(r, bw, 2.2, 1.1, 2.6, 1.7, bz, -s);
+  // side walls: full height on the building's west end, low glass partitions elsewhere
+  for (const side of [-1, 1]){
+    const u = side * (MOD_W / 2 - 0.1);
+    if (col === 0 && side < 0){
+      const ow = new THREE.Group(); ow.userData.n = [1, 0]; g.add(ow); walls.push(ow);
+      rbox(r, ow, 0.3, WALL_H, MOD_D + 0.3, WC, -MOD_W / 2 - 0.15, WALL_H / 2, Z(MOD_D / 2), {noCast:true});
+      rbox(r, ow, 0.34, 0.12, MOD_D + 0.34, CAP, -MOD_W / 2 - 0.15, WALL_H + 0.06, Z(MOD_D / 2), {noCast:true});
+      rbox(r, ow, 0.32, 0.14, MOD_D + 0.32, color, -MOD_W / 2 - 0.15, 0.95, Z(MOD_D / 2), {noCast:true});
+      continue;
+    }
+    rbox(r, g, 0.2, LOW_H, MOD_D, WC, u, LOW_H / 2, Z(MOD_D / 2), {noCast:true});
+    rbox(r, g, 0.24, 0.08, MOD_D + 0.04, color, u, LOW_H + 0.04, Z(MOD_D / 2), {noCast:true});
+    const gl = new THREE.Mesh(BOX, glassMat); gl.scale.set(0.06, GL_H, MOD_D); gl.position.set(u, LOW_H + GL_H / 2, Z(MOD_D / 2)); g.add(gl);
+  }
+  // corridor wall with one door per room (two for the split services room)
+  const doors = opt.doors || [0];
+  let from = -MOD_W / 2; const segs = [];
+  doors.forEach(d => { segs.push([from, d - 0.8]); from = d + 0.8; }); segs.push([from, MOD_W / 2]);
+  segs.forEach(([a, b]) => { const w = b - a, c = (a + b) / 2; if (w < 0.05) return;
+    rbox(r, g, w, LOW_H, 0.2, WC, c, LOW_H / 2, Z(0.1), {noCast:true});
+    rbox(r, g, w + 0.04, 0.08, 0.24, color, c, LOW_H + 0.04, Z(0.1), {noCast:true});
+    const gl = new THREE.Mesh(BOX, glassMat); gl.scale.set(w, GL_H, 0.06); gl.position.set(c, LOW_H + GL_H / 2, Z(0.1)); g.add(gl); });
+  doors.forEach(d => {
+    [-0.8, 0.8].forEach(o => rbox(r, g, 0.14, LOW_H + GL_H, 0.24, '#5d6a8f', d + o, (LOW_H + GL_H) / 2, Z(0.1), {noCast:true}));
+    rbox(r, g, 1.74, 0.14, 0.24, '#5d6a8f', d, LOW_H + GL_H, Z(0.1), {noCast:true});
+  });
+
+  if (kind === 'project'){
+    [[0, 2.4], [-3, 2.4], [3, 2.4], [0, 4.6], [-3, 4.6], [3, 4.6]].forEach(([u, v]) => r.slots.push(mkSlot(r, u, v, false)));
+    if (!r.annex) r.slots.push(mkSlot(r, 0, 6.6, true));
+    const wb = new THREE.Group(); wb.userData.n = [0, -s]; g.add(wb); walls.push(wb);
+    rbox(r, wb, 1.6, 0.9, 0.06, '#f4f5fb', 0, 1.7, Z(MOD_D - 0.02), {noCast:true});
+    [[color, -0.3, 1.9, 0.8], ['#2b2d3e', 0.1, 1.7, 1.0], [shade(color, .7), -0.1, 1.5, 0.6]].forEach(([c, x, y, w]) => rbox(r, wb, w, 0.06, 0.02, c, x, y, Z(MOD_D - 0.06), {noCast:true}));
+    plant(r, -4.3, Z(MOD_D - 0.6), 1.0); plant(r, 4.3, Z(MOD_D - 0.6), 0.9);
+    if (r.annex){ rbox(r, g, 2.0, 0.4, 0.8, shade(color, .6), 0, 0.22, Z(6.9)); rbox(r, g, 2.0, 0.5, 0.2, shade(color, .5), 0, 0.5, Z(7.3)); }
+  } else if (kind === 'ceo') buildCeo(r, Z);
+  else if (kind === 'facil') buildFacil(r, Z);
+  else if (kind === 'dining') buildDining(r, Z);
+  else buildLobby(r, Z);
+  rooms.push(r);
+  (opt.prebuilt || []).forEach(i => makeDesk(r.slots[i]));
+  if (opt.drop){ g.position.y = 14; if (colInfo.dropWith === r) colInfo.g.position.y = 14; }
+  return r;
+}
+function plant(room, x, z, s){
+  const g = new THREE.Group(); g.position.set(x, 0, z); g.scale.setScalar(s || 1); room.g.add(g);
+  rbox(room, g, 0.44, 0.4, 0.44, '#b8613e', 0, 0.2, 0); rbox(room, g, 0.48, 0.08, 0.48, '#9a4f32', 0, 0.42, 0);
+  rbox(room, g, 0.5, 0.4, 0.5, '#3f8f54', 0, 0.7, 0); rbox(room, g, 0.34, 0.34, 0.34, '#56a96a', 0.1, 1.0, 0.05); rbox(room, g, 0.24, 0.3, 0.24, '#3f8f54', -0.12, 1.2, -0.05);
+}
+function buildCeo(r, Z){
+  const g = r.g;
+  const rug = canvasTex(40, 28, (c, w, h) => { c.fillStyle = '#6b4b2a'; c.fillRect(0, 0, w, h); c.fillStyle = '#c99a3c'; c.fillRect(2, 2, w - 4, h - 4); c.fillStyle = '#8a6430'; c.fillRect(4, 4, w - 8, h - 8);
+    c.fillStyle = '#c99a3c'; for (let x = 8; x < w - 8; x += 6) for (let y = 8; y < h - 8; y += 6) c.fillRect(x, y, 2, 2); });
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(5, 3.6), new THREE.MeshLambertMaterial({map:rug}));
+  m.rotation.x = -Math.PI / 2; m.position.set(0, 0.02, Z(4.6)); m.receiveShadow = true; g.add(m);
+  const d = new THREE.Group(); d.position.set(0, 0, Z(4.5)); g.add(d);
+  rbox(r, d, 2.6, 0.1, 0.95, '#5a3a28', 0, 0.78, 0);
+  rbox(r, d, 2.5, 0.7, 0.08, '#4a2f20', 0, 0.38, 0.4);
+  rbox(r, d, 0.1, 0.72, 0.9, '#4a2f20', -1.22, 0.36, 0); rbox(r, d, 0.1, 0.72, 0.9, '#4a2f20', 1.22, 0.36, 0);
+  rbox(r, d, 0.7, 0.04, 0.45, '#2a2d3e', 0.2, 0.85, 0.05);
+  rbox(r, d, 0.7, 0.42, 0.04, '#2a2d3e', 0.2, 1.06, 0.28);
+  const sc = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.34), new THREE.MeshBasicMaterial({color:0x6fd6a0})); sc.position.set(0.2, 1.06, 0.255); sc.rotation.y = Math.PI; d.add(sc);
+  rbox(r, d, 0.14, 0.16, 0.14, '#eeedf7', -0.8, 0.91, 0.1);
+  rbox(r, d, 0.34, 0.06, 0.22, '#ffcf5a', -0.4, 0.86, 0.15);
+  const ch = new THREE.Group(); ch.position.set(0, 0, Z(5.3)); g.add(ch);
+  rbox(r, ch, 0.7, 0.12, 0.66, '#7a1f2b', 0, 0.48, 0); rbox(r, ch, 0.7, 1.0, 0.12, '#7a1f2b', 0, 1.0, r.s * 0.33);
+  rbox(r, ch, 0.1, 0.42, 0.1, '#2a2d3e', 0, 0.21, 0);
+  const sh = new THREE.Group(); sh.position.set(-4.4, 0, Z(6.4)); g.add(sh);
+  rbox(r, sh, 0.6, 1.9, 1.8, '#5a3a28', 0, 0.95, 0);
+  ['#e07a5f', '#4fc3b8', '#ffcf5a', '#8d6ad8', '#4a8fd6', '#5fae6e'].forEach((c, i) => rbox(r, sh, 0.4, 0.34, 0.14, c, 0.12, 0.45 + Math.floor(i / 3) * 0.6, -0.5 + (i % 3) * 0.45));
+  plant(r, 4.2, Z(7.2), 1.2); plant(r, -4.2, Z(1.0), 0.9);
+  rbox(r, g, 1.8, 0.45, 0.8, '#2c3a66', 3.4, 0.25, Z(2.0)); rbox(r, g, 1.8, 0.5, 0.2, '#24305a', 3.4, 0.5, Z(1.65));
+}
+function buildLobby(r, Z){
+  const g = r.g;
+  rbox(r, g, 3.4, 0.9, 0.7, '#e7e2f0', 2.0, 0.45, Z(7.6));
+  rbox(r, g, 3.44, 0.08, 0.74, '#7a7395', 2.0, 0.94, Z(7.6));
+  rbox(r, g, 0.5, 0.6, 0.45, '#2a2d3e', 1.5, 1.28, Z(7.6)); rbox(r, g, 0.2, 0.06, 0.2, '#ff8f5e', 1.5, 1.3, Z(7.36));
+  rbox(r, g, 0.9, 2.1, 0.8, '#c7cde0', 4.3, 1.05, Z(7.5));
+  const tbl = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.72, 0.08, 8), RM(r, '#c89b6d')); tbl.position.set(-2, 0.78, Z(4.5)); tbl.castShadow = true; g.add(tbl);
+  rbox(r, g, 0.12, 0.76, 0.12, '#4a4560', -2, 0.38, Z(4.5));
+  [-3, -1].forEach(x => { const st = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.08, 6), RM(r, '#e07a5f')); st.position.set(x, 0.5, Z(4.5)); st.castShadow = true; g.add(st); rbox(r, g, 0.08, 0.48, 0.08, '#4a4560', x, 0.24, Z(4.5)); });
+  rbox(r, g, 2.6, 0.45, 0.9, '#5a5fa0', -2.6, 0.25, Z(7.1)); rbox(r, g, 2.6, 0.7, 0.25, '#4a4f8a', -2.6, 0.6, Z(7.6));
+  rbox(r, g, 2.4, 1.0, 0.6, '#8fb4d9', 3.0, 0.5, Z(2.3)); rbox(r, g, 2.5, 0.08, 0.7, '#5d6a8f', 3.0, 1.04, Z(2.3));
+  rbox(r, g, 0.5, 1.0, 0.5, '#e7e2f0', -4.3, 0.5, Z(1.0)); rbox(r, g, 0.36, 0.5, 0.36, '#7cb8ff', -4.3, 1.25, Z(1.0));
+  plant(r, -4.3, Z(3.0), 1.1); plant(r, 4.3, Z(5.2), 1.0);
+}
+
+const frostMat = new THREE.MeshLambertMaterial({color:0xe8f4ff, transparent:true, opacity:0.55, depthWrite:false});
+function buildFacil(r, Z){            // left half: toilets, right half: meeting room
+  const g = r.g, s = r.s, X = r.cx;
+  r.signs = [{u:-2.5, text:'TOILETTES'}, {u:2.5, text:'SALLE DE RÉUNION'}];
+  const carpet = new THREE.Mesh(new THREE.PlaneGeometry(4.8, 7.8), new THREE.MeshLambertMaterial({map:tileTex('#8d86b8', '#958fc0')}));
+  carpet.rotation.x = -Math.PI / 2; carpet.position.set(2.5, 0.016, Z(4)); carpet.receiveShadow = true; g.add(carpet);
+  rbox(r, g, 0.2, 1.0, MOD_D, WC, 0, 0.5, Z(MOD_D / 2), {noCast:true});
+  const fr = new THREE.Mesh(BOX, frostMat); fr.scale.set(0.06, 1.1, MOD_D); fr.position.set(0, 1.55, Z(MOD_D / 2)); g.add(fr);
+  // two stalls with doors that open and close
+  r.stalls = [];
+  [-4.62, -2.9, -1.18].forEach(u => rbox(r, g, 0.08, 1.6, 1.6, '#9fb7d0', u, 0.8, Z(7.2)));
+  [-3.76, -2.04].forEach(cu => {
+    rbox(r, g, 0.44, 0.4, 0.5, '#f4f5fb', cu, 0.2, Z(7.45)); rbox(r, g, 0.5, 0.5, 0.18, '#f4f5fb', cu, 0.62, Z(7.8)); rbox(r, g, 0.46, 0.04, 0.52, '#dfe3ee', cu, 0.42, Z(7.45));
+    const pv = new THREE.Group(); pv.position.set(cu - 0.82, 0, Z(6.4)); g.add(pv);
+    rbox(r, pv, 1.6, 1.45, 0.06, '#6c8fb3', 0.8, 0.82, 0);
+    rbox(r, pv, 0.1, 0.12, 0.09, '#ff8f5e', 1.4, 0.95, 0);
+    const base = [[X - 2.5, s * CW], [X - 2.5, s * (CW + 0.8)], [X + cu, s * (CW + 0.8)]];
+    const frontPt = [X + cu, s * (CW + 5.6)], insidePt = [X + cu, s * (CW + 7.25)];
+    r.stalls.push({pivot:pv, open:0, target:0, busy:false,
+      front:{entry:[X - 2.5, 0], inner:[...base, frontPt], face:s < 0 ? Math.PI : 0},
+      inside:{entry:[X - 2.5, 0], inner:[...base, frontPt, insidePt], face:s < 0 ? 0 : Math.PI}});
+  });
+  rbox(r, g, 0.5, 0.85, 2.2, '#e7e2f0', -0.45, 0.425, Z(3.2));
+  [2.7, 3.7].forEach(v => { rbox(r, g, 0.34, 0.06, 0.4, '#bfe3ff', -0.45, 0.87, Z(v)); rbox(r, g, 0.06, 0.16, 0.06, '#9a9cb8', -0.6, 0.98, Z(v)); });
+  rbox(r, g, 0.04, 0.6, 2.0, '#d6efff', -0.13, 1.45, Z(3.2), {noCast:true});
+  r.sink = {entry:[X - 2.5, 0], inner:[[X - 2.5, s * CW], [X - 2.5, s * (CW + 0.8)], [X - 1.15, s * (CW + 0.8)], [X - 1.15, s * (CW + 3.2)]], face:Math.PI / 2};
+  // meeting room
+  rbox(r, g, 2.6, 0.08, 1.3, '#5a3a28', 2.5, 0.76, Z(4.5));
+  rbox(r, g, 0.14, 0.72, 0.14, '#3a2a20', 2.5, 0.36, Z(4.5));
+  rbox(r, g, 0.5, 0.04, 0.3, '#2a2d3e', 2.5, 0.82, Z(4.5));
+  r.meet = [];
+  [[1.7, 3.3, 1], [3.3, 3.3, 1], [1.7, 5.7, -1], [3.3, 5.7, -1]].forEach(([u, v, dir]) => {
+    rbox(r, g, 0.55, 0.1, 0.5, '#4a4f8a', u, 0.47, Z(v)); rbox(r, g, 0.55, 0.6, 0.1, '#3a3f78', u, 0.82, Z(v - dir * 0.3)); rbox(r, g, 0.08, 0.42, 0.08, '#2a2d3e', u, 0.21, Z(v));
+    r.meet.push({loc:{entry:[X + 2.5, 0], inner:[[X + 2.5, s * CW], [X + 2.5, s * (CW + 0.8)], [X + 4.4, s * (CW + 0.8)], [X + 4.4, s * (CW + v)], [X + u, s * (CW + v)]], face:(dir > 0) === (s < 0) ? Math.PI : 0}});
+  });
+  const wb = new THREE.Group(); wb.userData.n = [0, -s]; g.add(wb); walls.push(wb);
+  rbox(r, wb, 2.0, 1.0, 0.06, '#f4f5fb', 2.5, 1.65, Z(MOD_D - 0.02), {noCast:true});
+  [['#e05a5a', 2.1, 1.9, 0.9], ['#4a8fd6', 2.6, 1.65, 1.3], ['#5fae6e', 2.3, 1.4, 0.7]].forEach(([c, x, y, w]) => rbox(r, wb, w, 0.06, 0.02, c, x, y, Z(MOD_D - 0.06), {noCast:true}));
+  plant(r, 4.4, Z(7.4), 0.9);
+}
+function buildDining(r, Z){
+  const g = r.g, s = r.s, X = r.cx;
+  r.signs = [{u:0, text:'CANTINE'}];
+  r.seats = [];
+  [-2.2, 2.2].forEach(tu => {
+    rbox(r, g, 1.0, 0.08, 3.9, '#c89b6d', tu, 0.76, Z(4.5));
+    [[-0.4, 2.7], [0.4, 2.7], [-0.4, 6.3], [0.4, 6.3]].forEach(([du, v]) => rbox(r, g, 0.07, 0.72, 0.07, '#4a4560', tu + du, 0.36, Z(v)));
+    [-1, 1].forEach(side => {
+      const u = tu + side * 0.85;
+      rbox(r, g, 0.4, 0.44, 3.9, '#8a5a3c', u, 0.22, Z(4.5));
+      [3.2, 4.5, 5.8].forEach(v => {
+        const lane = Math.abs(u) < 2.2 ? 0 : Math.sign(u) * 4.2;
+        const plate = new THREE.Group(); plate.position.set(tu + side * 0.28, 0.8, Z(v)); g.add(plate);
+        box(plate, 0.34, 0.02, 0.34, '#f4f5fb', 0, 0, 0, {noCast:true});
+        box(plate, 0.16, 0.07, 0.16, ['#e0a040', '#7cc46a', '#e05a5a', '#f2d7a0'][Math.floor(Math.random() * 4)], 0, 0.045, 0, {noCast:true});
+        box(plate, 0.1, 0.14, 0.1, '#7cb8ff', 0, 0.07, 0.26, {noCast:true});
+        plate.visible = false;
+        r.seats.push({tu, v, plate, taken:false, loc:{entry:[X, 0], inner:[[X, s * CW], [X, s * (CW + 0.8)], [X + lane, s * (CW + 0.8)], [X + lane, s * (CW + v)], [X + u, s * (CW + v)]], face:side < 0 ? Math.PI / 2 : -Math.PI / 2}});
+      });
+    });
+  });
+  rbox(r, g, 5.6, 0.9, 0.7, '#e7e2f0', 0, 0.45, Z(7.6)); rbox(r, g, 5.64, 0.08, 0.74, '#7a7395', 0, 0.94, Z(7.6));
+  ['#e0a040', '#7cc46a', '#e05a5a', '#f2d7a0', '#c98a5a'].forEach((c, i) => rbox(r, g, 0.7, 0.12, 0.45, c, -2.2 + i * 1.1, 1.02, Z(7.55)));
+  rbox(r, g, 0.8, 1.7, 0.7, '#5a5fa0', 4.3, 0.85, Z(7.3));
+  const sc = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.45), new THREE.MeshBasicMaterial({color:0x7ff0d0}));
+  sc.position.set(4.3, 1.3, Z(7.3) - s * 0.36); if (s > 0) sc.rotation.y = Math.PI; g.add(sc);
+  const wb = new THREE.Group(); wb.userData.n = [0, -s]; g.add(wb); walls.push(wb);
+  rbox(r, wb, 2.2, 0.8, 0.06, '#2b2d3e', 0, 1.75, Z(MOD_D - 0.02), {noCast:true});
+  [[-0.5, 1.95, 0.9], [-0.3, 1.75, 1.3], [-0.6, 1.55, 0.8]].forEach(([x, y, w]) => rbox(r, wb, w, 0.06, 0.02, '#fffbea', x, y, Z(MOD_D - 0.06), {noCast:true}));
+  plant(r, -4.4, Z(7.4), 1.0);
+}
+
+/* ---------- desk slots ---------- */
+function mkSlot(r, u, v, mgr){
+  const s = r.s, seatV = v + 0.75, lane = u < 0 ? -1.5 : 1.5, X = r.cx;
+  return {room:r, u, v, seatV, mgr, lane, x:X + u, z:s * (CW + v), seat:{x:X + u, z:s * (CW + seatV)}, face:s < 0 ? 0 : Math.PI, agent:null, desk:null,
+    loc:{entry:[X, 0], inner:[[X, s * CW], [X, s * (CW + 0.8)], [X + lane, s * (CW + 0.8)], [X + lane, s * (CW + seatV)], [X + u, s * (CW + seatV)]], face:s < 0 ? 0 : Math.PI}};
+}
+const desks = [];
+function makeDesk(slot){
+  const r = slot.room, p = r.project;
+  const g = new THREE.Group(); g.position.set(slot.u, 0, slot.z); g.rotation.y = slot.face; r.g.add(g);
+  const w = slot.mgr ? 2.3 : 1.7;
+  rbox(r, g, w, 0.08, 0.9, slot.mgr ? '#8a5a3c' : '#c89b6d', 0, 0.76, 0);
+  rbox(r, g, w, 0.04, 0.9, slot.mgr ? '#6b432d' : '#a77d55', 0, 0.71, 0);
+  [[-w / 2 + 0.07, -0.38], [w / 2 - 0.07, -0.38], [-w / 2 + 0.07, 0.38], [w / 2 - 0.07, 0.38]].forEach(([x, z]) => rbox(r, g, 0.07, 0.72, 0.07, '#4a4560', x, 0.36, z));
+  rbox(r, g, w - 0.2, 0.5, 0.04, '#3e3a55', 0, 0.45, 0.42);
+  const tex = screenTex(40, 24), scrMat = new THREE.MeshBasicMaterial({map:tex});
+  (slot.mgr ? [-0.5, 0.5] : [0]).forEach(mx => {
+    rbox(r, g, 0.1, 0.24, 0.08, '#2a2d3e', mx, 0.92, 0.26);
+    rbox(r, g, 0.36, 0.03, 0.22, '#2a2d3e', mx, 0.815, 0.26);
+    rbox(r, g, 0.98, 0.6, 0.06, '#232536', mx, 1.3, 0.24);
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.88, 0.5), scrMat);
+    scr.position.set(mx, 1.3, 0.205); scr.rotation.y = Math.PI; g.add(scr);
+  });
+  rbox(r, g, 0.62, 0.03, 0.2, '#2f3247', 0, 0.815, -0.18);
+  rbox(r, g, 0.56, 0.01, 0.15, '#4b4f6b', 0, 0.834, -0.18);
+  rbox(r, g, 0.12, 0.03, 0.16, '#2f3247', 0.48, 0.815, -0.16);
+  const k = Math.random();
+  if (slot.mgr) rbox(r, g, 0.5, 0.06, 0.18, p.color, -0.8, 0.83, -0.25);
+  else if (k < .4) rbox(r, g, 0.13, 0.15, 0.13, ['#eeedf7', '#e07a5f', '#4a8fd6'][Math.floor(k * 7.5)], -0.65, 0.875, -0.05);
+  else if (k < .7){ rbox(r, g, 0.18, 0.16, 0.18, '#b8613e', -0.65, 0.88, 0.2); rbox(r, g, 0.2, 0.2, 0.2, '#56a96a', -0.65, 1.06, 0.2); }
+  else rbox(r, g, 0.34, 0.03, 0.26, '#f4f5fb', -0.55, 0.815, 0.05);
+  const ch = new THREE.Group(); ch.position.set(0, 0, -0.82); g.add(ch);
+  rbox(r, ch, 0.62, 0.1, 0.58, p.color, 0, 0.47, 0);
+  rbox(r, ch, 0.62, slot.mgr ? 0.9 : 0.7, 0.1, shade(p.color, .75), 0, slot.mgr ? 0.98 : 0.88, -0.3);
+  rbox(r, ch, 0.1, 0.4, 0.1, '#2a2d3e', 0, 0.22, 0);
+  rbox(r, ch, 0.5, 0.05, 0.08, '#2a2d3e', 0, 0.03, 0); rbox(r, ch, 0.08, 0.05, 0.5, '#2a2d3e', 0, 0.03, 0);
+  g.traverse(o => { if (o.isMesh && o.material !== scrMat) o.castShadow = true; });
+  const d = {g, slot, tex, scrMat, lines:[], appear:1};
+  r.screens.push(scrMat);
+  drawScreen(d, false);
+  desks.push(d); slot.desk = d;
+  applyDim(r);
+  return d;
+}
+const CODE_COLORS = ['#7cb8ff', '#ffcf5a', '#6fd6a0', '#e0a0ff', '#c9cbf0', '#ff8f9e'];
+function drawScreen(d, typing){
+  const g = d.tex.userData.g, c = d.tex.userData.canvas;
+  g.fillStyle = '#0f1224'; g.fillRect(0, 0, c.width, c.height);
+  if (d.slot.room.project.state === 'paused'){ d.tex.needsUpdate = true; return; }
+  g.fillStyle = d.slot.room.project.color; g.fillRect(0, 0, c.width, 2);
+  if (!d.lines.length) for (let i = 0; i < 6; i++) d.lines.push(newLine());
+  d.lines.forEach((l, i) => { let x = 2 + l.ind * 3; l.parts.forEach(([len, col]) => { g.fillStyle = col; g.fillRect(x, 4 + i * 3, len, 2); x += len + 1; }); });
+  if (typing && (Math.floor(performance.now() / 300) % 2)){ const last = d.lines[d.lines.length - 1]; let x = 2 + last.ind * 3; last.parts.forEach(([len]) => x += len + 1); g.fillStyle = '#fff'; g.fillRect(x, 4 + (d.lines.length - 1) * 3, 2, 2); }
+  d.tex.needsUpdate = true;
+}
+function newLine(){ const n = 1 + Math.floor(Math.random() * 3), parts = []; for (let i = 0; i < n; i++) parts.push([2 + Math.floor(Math.random() * 8), pick(CODE_COLORS)]); return {ind:Math.floor(Math.random() * 3), parts}; }
+function applyDim(r){
+  const k = r.dim;
+  for (const key in r.mats){ const m = r.mats[key]; m.color.copy(m.userData.base).multiplyScalar(k); }
+  r.screens.forEach(m => m.color.setScalar(k < 0.85 ? 0.3 : 1));
+}
+const poofs = [];
+function poof(x, y, z, color, n){
+  for (let i = 0; i < (n || 14); i++){
+    const m = new THREE.Mesh(BOX, M(i % 3 ? '#fffbea' : color)); m.scale.setScalar(0.16); m.position.set(x, y, z); scene.add(m);
+    poofs.push({m, v:[(Math.random() - .5) * 4, 1.5 + Math.random() * 2.5, (Math.random() - .5) * 4], life:0.8});
+  }
+}
+
+/* ---------- characters ---------- */
+const ROLES = {
+  ceo:    {label:'CEO · opérateur', shirt:'#2c3a66', pants:'#1d2340', hair:'slick',  acc:['tie'],     accC:'#ffcf5a'},
+  lead:   {label:'Manager',         shirt:'#e07a5f', pants:'#3d405b', hair:'short',  acc:['headset']},
+  explore:{label:'Explorateur',     shirt:'#5fae6e', pants:'#3a4a3d', hair:'cap',    accC:'#2f6b3a'},
+  plan:   {label:'Architecte',      shirt:'#8d6ad8', pants:'#3a3358', hair:'bun',    acc:['glasses']},
+  review: {label:'Relecteur',       shirt:'#4a8fd6', pants:'#2d3550', hair:'long',   acc:['glasses']},
+  front:  {label:'Frontend',        shirt:'#e07aa8', pants:'#3d3550', hair:'beanie', accC:'#ffcf5a'},
+  test:   {label:'Testeur',         shirt:'#e6c34a', pants:'#4a4232', hair:'short',  acc:['goggles']},
+  back:   {label:'Backend',         shirt:'#53b3c9', pants:'#2d3b50', hair:'long'},
+  docs:   {label:'Rédacteur',       shirt:'#c98a5a', pants:'#45362c', hair:'bun'},
+};
+const SKINS = ['#f1c9a5', '#d9a27a', '#a86f4c', '#7a4a32', '#ffe0bd'];
+const HAIRS = ['#2b1d14', '#5a3a22', '#c9a15a', '#1b1a26', '#a0412d', '#e8e4f0'];
+function makeChar(look){
+  const g = new THREE.Group(), P = {};
+  const {skin, shirt, pants, hairC} = look;
+  for (const s of [-1, 1]){
+    const leg = new THREE.Group(); leg.position.set(s * 0.14, 0.62, 0); g.add(leg);
+    box(leg, 0.22, 0.54, 0.24, pants, 0, -0.27, 0);
+    box(leg, 0.24, 0.1, 0.32, '#24222e', 0, -0.57, 0.04);
+    P[s < 0 ? 'legL' : 'legR'] = leg;
+  }
+  box(g, 0.58, 0.62, 0.34, shirt, 0, 0.93, 0);
+  box(g, 0.6, 0.08, 0.36, shade(shirt, .7), 0, 0.64, 0);              // belt / hem
+  if (look.acc.includes('tie')){ box(g, 0.2, 0.5, 0.02, '#eeedf7', 0, 1.0, 0.175); box(g, 0.08, 0.42, 0.03, look.accC, 0, 0.97, 0.185); }
+  else box(g, 0.26, 0.06, 0.02, shade(shirt, 1.25), 0, 1.2, 0.172);
+  for (const s of [-1, 1]){
+    const arm = new THREE.Group(); arm.position.set(s * 0.38, 1.2, 0); g.add(arm);
+    box(arm, 0.17, 0.48, 0.19, shirt, 0, -0.23, 0);
+    box(arm, 0.15, 0.12, 0.16, skin, 0, -0.53, 0);
+    P[s < 0 ? 'armL' : 'armR'] = arm;
+  }
+  const head = new THREE.Group(); head.position.y = 1.24; g.add(head); P.head = head;
+  box(head, 0.5, 0.48, 0.46, skin, 0, 0.24, 0);
+  box(head, 0.07, 0.1, 0.02, '#1b1a26', -0.11, 0.25, 0.235);
+  box(head, 0.07, 0.1, 0.02, '#1b1a26', 0.11, 0.25, 0.235);
+  box(head, 0.12, 0.03, 0.02, shade(skin, .72), 0, 0.12, 0.235);
+  const hs = look.hair;
+  if (hs === 'short' || hs === 'slick' || hs === 'bun' || hs === 'long'){
+    box(head, 0.54, 0.14, 0.5, hairC, 0, 0.52, -0.01);
+    box(head, 0.54, 0.3, 0.1, hairC, 0, 0.36, -0.22);
+    box(head, 0.06, 0.16, 0.3, hairC, -0.27, 0.4, -0.06); box(head, 0.06, 0.16, 0.3, hairC, 0.27, 0.4, -0.06);
+  }
+  if (hs === 'slick') box(head, 0.4, 0.06, 0.06, hairC, 0.06, 0.46, 0.23);
+  if (hs === 'bun') box(head, 0.2, 0.2, 0.2, hairC, 0, 0.66, -0.17);
+  if (hs === 'long'){ box(head, 0.56, 0.62, 0.1, hairC, 0, 0.16, -0.24); box(head, 0.07, 0.46, 0.3, hairC, -0.28, 0.22, -0.06); box(head, 0.07, 0.46, 0.3, hairC, 0.28, 0.22, -0.06); }
+  if (hs === 'cap'){ box(head, 0.55, 0.16, 0.52, look.accC, 0, 0.55, 0); box(head, 0.44, 0.05, 0.22, look.accC, 0, 0.48, 0.32); box(head, 0.54, 0.18, 0.08, hairC, 0, 0.38, -0.22); }
+  if (hs === 'beanie'){ box(head, 0.56, 0.24, 0.52, look.accC, 0, 0.55, 0); box(head, 0.58, 0.08, 0.54, shade(look.accC, .7), 0, 0.44, 0); box(head, 0.12, 0.12, 0.12, '#f4f1ff', 0, 0.72, 0); }
+  if (look.acc.includes('headset')){
+    box(head, 0.6, 0.05, 0.08, '#2a2a38', 0, 0.62, 0);
+    box(head, 0.04, 0.3, 0.06, '#2a2a38', -0.3, 0.46, 0); box(head, 0.04, 0.3, 0.06, '#2a2a38', 0.3, 0.46, 0);
+    box(head, 0.08, 0.17, 0.17, '#2a2a38', -0.29, 0.27, 0); box(head, 0.08, 0.17, 0.17, '#2a2a38', 0.29, 0.27, 0);
+    box(head, 0.03, 0.03, 0.2, '#2a2a38', 0.27, 0.13, 0.14); box(head, 0.05, 0.05, 0.05, '#e07a5f', 0.25, 0.13, 0.25);
+  }
+  if (look.acc.includes('glasses')){
+    [-0.11, 0.11].forEach(x => { box(head, 0.17, 0.13, 0.02, '#20202c', x, 0.25, 0.245); box(head, 0.12, 0.08, 0.025, '#bfe3ff', x, 0.25, 0.25); });
+    box(head, 0.06, 0.02, 0.02, '#20202c', 0, 0.27, 0.245);
+  }
+  if (look.acc.includes('goggles')){
+    box(head, 0.54, 0.08, 0.5, '#2a2a38', 0, 0.3, 0);
+    [-0.11, 0.11].forEach(x => box(head, 0.18, 0.13, 0.04, '#7ff0d0', x, 0.28, 0.25));
+  }
+  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  return {g, P};
+}
+
+function lookFor(role, seed){
+  const r = ROLES[role], rr = rng(seed);
+  return {skin:SKINS[Math.floor(rr() * SKINS.length)], hairC:HAIRS[Math.floor(rr() * HAIRS.length)], shirt:r.shirt, pants:r.pants, hair:r.hair, acc:r.acc || [], accC:r.accC || shade(r.shirt, .6)};
+}
+
+/* ---------- live data from the local server ---------- */
+const TOKEN = '__CELESTE_TOKEN__';
+const PROJECTS = {};                 // key → server project + its rooms
+const agents = [];                   // characters on screen (managers + sub-agents)
+const byId = new Map();
+const journal = [];                  // entries received from the server
+let selected = null, sheetProject = null, hovered = null, showNames = false;
+const ALL_TOOLS = ['Read', 'Edit', 'Write', 'Bash', 'Grep', 'Glob', 'Agent', 'WebFetch'];
+function hashStr(s){ let h = 2166136261; for (const c of String(s)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
+const ago = t => { if (!t) return '—'; const m = Math.max(1, Math.round((Date.now() - t) / 60000)); if (m < 60) return m + ' min'; const h = Math.round(m / 60); if (h < 48) return h + ' h'; return Math.round(h / 24) + ' j'; };
+async function api(pathname, body){
+  const r = await fetch(pathname, {method:'POST', headers:{'content-type':'application/json', 'x-celeste-token':TOKEN}, body:JSON.stringify(body)});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || ('erreur ' + r.status));
+  return j;
+}
+
+/* ---------- fixed rooms: CEO, lobby, services ---------- */
+const ceoRoom = makeRoom({kind:'ceo', col:0, s:-1});
+const lobby = makeRoom({kind:'lobby', col:0, s:1});
+const facil = makeRoom({kind:'facil', col:1, s:-1, doors:[-2.5, 2.5]});
+const dining = makeRoom({kind:'dining', col:1, s:1});
+const roomsOf = p => rooms.filter(r => r.project === p);
+function nextFreeSlot(){ for (let c = 2; c < 60; c++) for (const s of [-1, 1]) if (!rooms.some(r => r.col === c && r.s === s)) return [c, s]; }
+function upsertProject(d, animate){
+  let p = PROJECTS[d.key];
+  const was = p ? p.state : null;
+  if (!p){ p = PROJECTS[d.key] = {...d}; }
+  else Object.assign(p, d);
+  p.isNew = Date.now() - (p.firstSeen || 0) < 15 * 60e3;
+  if (!roomsOf(p).length){
+    const [c, s] = nextFreeSlot();
+    const r = makeRoom({kind:'project', project:p, col:c, s, drop:!!animate, prebuilt:p.state === 'paused' ? [0, 6] : []});
+    if (p.state === 'paused'){ r.dim = r.dimT = 0.5; applyDim(r); }
+    if (animate) focusRoom(r, 1.2);
+  } else if (was && was !== p.state){
+    roomsOf(p).forEach(r => { r.dimT = p.state === 'paused' ? 0.5 : 1; if (p.state === 'active'){ r.flicker = 0.9; focusRoom(r, 1.1); } r.slots.forEach(sl => sl.desk && drawScreen(sl.desk, false)); });
+  }
+  renderLegend(); refreshStats();
+  if (sheetProject === p) renderSheet();
+}
+function focusRoom(r, zoom){ view.txT = r.cx; view.tzT = r.s * (CW + MOD_D / 2) * 0.6; if (zoom) view.zoomT = Math.max(view.zoomT, zoom); }
+function findSlot(p, mgr){
+  for (const r of roomsOf(p)){ const sl = r.slots.find(s => s.mgr === mgr && !s.agent); if (sl) return sl; }
+  const [c, s] = nextFreeSlot();
+  const r = makeRoom({kind:'project', project:p, col:c, s, drop:true, annex:!mgr && roomsOf(p).length > 0});
+  if (r.annex && !mgr) return r.slots.find(s => !s.agent);
+  return r.slots.find(s => s.mgr === mgr && !s.agent) || r.slots.find(s => !s.agent);
+}
+
+/* ---------- characters on screen ---------- */
+function lbl(cls){ const e = document.createElement('div'); e.className = 'lbl ' + cls; e.hidden = true; overlay.appendChild(e); return e; }
+function setLabel(e, html, cls){
+  if (cls !== undefined && e._cls !== cls){ e.className = 'lbl ' + cls; e._cls = cls; e._html = null; }
+  if (e._html === html) return;
+  e.innerHTML = html; e._html = html;
+  const was = e.hidden; e.hidden = false; e._w = e.offsetWidth; e._h = e.offsetHeight; e.hidden = was;
+}
+function makeAgent(d){
+  const role = ROLES[d.role] ? d.role : 'back';
+  const look = lookFor(role, hashStr(d.id));
+  const {g, P} = makeChar(look); scene.add(g);
+  const a = {id:d.id, data:d, name:d.name, role, look, project:PROJECTS[d.project], mgr:d.kind === 'session', request:d.request,
+    g, P, t:Math.random() * 10, moving:false, seated:false, typing:false, talking:false, path:[], loc:null, state:'idle', headYaw:0, bubbleUntil:0, typeUntil:0};
+  g.traverse(o => { if (o.isMesh) o.userData.agent = a; });
+  a.tagEl = lbl('tag'); a.bubbleEl = lbl('bubble'); a.alertEl = lbl('alert'); setLabel(a.alertEl, '!');
+  agents.push(a); byId.set(a.id, a);
+  return a;
+}
+function applyData(a, d){
+  a.data = d; a.name = d.name; a.request = d.request;
+  if (a.state === 'work' && a.seated) a.typing = d.status === 'working';
+}
+function seatAgent(a, slot){
+  slot.agent = a; a.slot = slot; a.loc = slot.loc;
+  if (!slot.desk) makeDesk(slot);
+  a.g.position.set(slot.seat.x, 0, slot.seat.z); a.g.rotation.y = slot.face;
+  a.seated = true; a.state = 'work'; a.typing = a.data.status === 'working';
+}
+const ceo = (() => {
+  const look = {skin:'#f1c9a5', hairC:'#2b1d14', shirt:ROLES.ceo.shirt, pants:ROLES.ceo.pants, hair:'slick', acc:['tie'], accC:'#ffcf5a'};
+  const {g, P} = makeChar(look); scene.add(g);
+  const c = {id:'ceo', name:'Toi', role:'ceo', look, g, P, t:0, convo:[], seated:true, typing:false, moving:false, isCeo:true, headYaw:0, bubbleUntil:0,
+    tagEl:lbl('tag'), bubbleEl:lbl('bubble'), alertEl:lbl('alert')};
+  g.position.set(ceoRoom.cx, 0, -(CW + 5.3)); g.rotation.y = 0;
+  g.traverse(o => { if (o.isMesh) o.userData.agent = c; });
+  return c;
+})();
+
+/* ---------- locations + routing (every room door opens on the corridor, z = 0) ---------- */
+const DOOR_OUT = {entry:[1.0, 0], inner:[[-0.9, 0]], face:Math.PI / 2};
+const CEO_SEAT = {entry:[ceoRoom.cx, 0], inner:[[ceoRoom.cx, -CW], [ceoRoom.cx, -(CW + 0.8)], [ceoRoom.cx + 1.6, -(CW + 0.8)], [ceoRoom.cx + 1.6, -(CW + 5.3)], [ceoRoom.cx, -(CW + 5.3)]], face:0};
+ceo.loc = CEO_SEAT; ceo.atDesk = true;
+const EXIT = {entry:[1.0, 0], inner:[[-0.9, 0], [-10, 0], [-10, 11.6], [-34, 11.6]], face:-Math.PI / 2};
+const L = lobby.cx;
+const COFFEE = {entry:[L, 0], inner:[[L, CW], [L, CW + 0.8], [L + 1.5, CW + 0.8], [L + 1.5, CW + 6.9]], face:0};
+const TABLE = [
+  {entry:[L, 0], inner:[[L, CW], [L, CW + 0.8], [L - 3.4, CW + 0.8], [L - 3.4, CW + 4.5]], face:Math.PI / 2},
+  {entry:[L, 0], inner:[[L, CW], [L, CW + 0.8], [L - 0.6, CW + 0.8], [L - 0.6, CW + 4.5]], face:-Math.PI / 2},
+];
+function behind(b){
+  const sl = b.slot, r = sl.room, s = r.s, X = r.cx;
+  const u = sl.mgr ? 0.9 : sl.u + 0.6, v = sl.mgr ? 5.95 : sl.seatV + 0.7;
+  const px = X + u, pz = s * (CW + v);
+  return {entry:[X, 0], inner:[[X, s * CW], [X, s * (CW + 0.8)], [X + sl.lane, s * (CW + 0.8)], [X + sl.lane, pz], [px, pz]], face:Math.atan2(sl.seat.x - px, sl.seat.z - pz)};
+}
+function route(A, B){
+  const pts = [];
+  for (let i = A.inner.length - 2; i >= 0; i--) pts.push(A.inner[i]);
+  pts.push(A.entry, B.entry); B.inner.forEach(p => pts.push(p));
+  return pts;
+}
+function walkTo(a, loc, cb){ a.path = route(a.loc, loc); a.dest = loc; a.moving = true; a.seated = false; a.typing = false; a.onArrive = cb; }
+
+/* ---------- timers, speech ---------- */
+let simT = 0; const timers = [];
+const later = (s, fn) => timers.push({at:simT + s, fn});
+function say(a, text, secs, kind){
+  setLabel(a.bubbleEl, kind === 'tool' ? '<b>' + esc(text[0]) + '</b>' + esc(text[1]) : esc(text), 'bubble' + (kind ? ' ' + kind : ''));
+  a.bubbleUntil = simT + (secs || 2.4);
+  if (kind !== 'tool'){ a.talking = true; later(secs || 2.4, () => a.talking = false); }
+}
+const refreshSheet = (...who) => { if (who.includes(selected) || (sheetProject && who.some(w => w && w.project === sheetProject))) renderSheet(); };
+
+/* ---------- what happens in the building ---------- */
+function backToDesk(a){
+  if (!a.slot || byId.get(a.id) !== a) return;
+  a.state = 'visit';
+  walkTo(a, a.slot.loc, () => { a.seated = true; a.state = 'work'; a.busy = false; a.typing = a.data.status === 'working'; refreshSheet(a); });
+}
+function goHome(a){
+  if (a.isCeo) walkTo(a, CEO_SEAT, () => { a.atDesk = true; a.seated = true; refreshSheet(a); });
+  else backToDesk(a);
+}
+function setPaper(a, on){
+  if (!a.paper){ a.paper = box(a.P.armR, 0.26, 0.03, 0.34, '#fffbea', 0, -0.6, 0.14); box(a.paper, 0.7, 1.4, 0.06, '#7a7a9a', 0, 0.6, -0.1, {noCast:true}); a.paper.traverse(o => o.userData.agent = a); }
+  a.paper.visible = on; a.carry = on;
+}
+// Someone (the CEO for a prompt, a manager for a sub-agent) walks over with a sheet of paper.
+function delegate(boss, target, task){
+  if (!target.slot || boss.busy) return;
+  if (boss.isCeo){ if (!boss.atDesk) return; boss.atDesk = false; }
+  else if (boss.state !== 'work' || boss.moving) return;
+  else boss.state = 'visit';
+  boss.busy = true; setPaper(boss, true);
+  walkTo(boss, behind(target), () => {
+    let tries = 0;
+    const go = () => {
+      if (!byId.has(target.id) && !target.isCeo){ setPaper(boss, false); boss.busy = false; goHome(boss); return; }
+      if (!(target.seated && target.loc === target.slot.loc && !target.moving)){
+        if (++tries < 40){ later(0.5, go); return; }
+        setPaper(boss, false); boss.busy = false; goHome(boss); return;
+      }
+      if (!boss.isCeo) boss.state = 'talk';
+      boss.lookAt = target; target.lookAt = boss;
+      say(boss, (boss.isCeo ? 'Nouvelle consigne : ' : 'Pour toi : ') + task, 2.8);
+      later(3.0, () => { setPaper(boss, false); setPaper(target, true); say(target, 'Reçu, je m’y mets !', 2); });
+      later(4.6, () => setPaper(target, false));
+      later(5.2, () => { boss.lookAt = null; target.lookAt = null; boss.busy = false; goHome(boss); });
+    };
+    go();
+  });
+}
+// A new manager or sub-agent comes in from the street, knocks, and sits at a desk that pops up.
+function arrive(a){
+  const slot = findSlot(a.project, a.mgr);
+  slot.agent = a; a.slot = slot; a.state = 'enter'; a.busy = true;
+  a.loc = {entry:[1.0, 0], inner:[[-0.9, 0], [-10, 0], [-10, 11.6]], face:0};
+  a.g.position.set(-10, 0, 11.6); a.g.rotation.y = Math.PI;
+  a.path = [[-10, 0], [-0.9, 0]]; a.dest = DOOR_OUT; a.moving = true;
+  a.onArrive = () => {
+    say(a, 'Toc toc !', 1.2, 'knock');
+    later(1.1, () => {
+      door.forceUntil = simT + 2;
+      walkTo(a, slot.loc, () => {
+        a.seated = true; a.state = 'work'; a.busy = false; a.typing = a.data.status === 'working';
+        say(a, a.mgr ? 'Je prends le projet en main.' : 'Bonjour ! Je m’installe.', 2);
+        refreshSheet(a); renderLegend();
+      });
+      later(Math.max(1, slot.x / 2.6 - 1), () => { if (!slot.desk && slot.agent === a){ const d = makeDesk(slot); d.appear = 0; poof(slot.x, 0.9, slot.z, a.project.color); } });
+    });
+  };
+}
+function removeAgent(a){
+  scene.remove(a.g); [a.tagEl, a.bubbleEl, a.alertEl].forEach(e => e.remove());
+  agents.splice(agents.indexOf(a), 1); byId.delete(a.id);
+  agents.forEach(x => { if (x.lookAt === a) x.lookAt = null; });
+  if (ceo.lookAt === a) ceo.lookAt = null;
+  if (a.slot && a.slot.agent === a) a.slot.agent = null;
+  if (view.follow === a) view.follow = null;
+  if (selected === a) select(null);
+  refreshStats(); renderLegend(); if (sheetProject) renderSheet();
+}
+// SubagentStop: hand the report to the manager, then leave. SessionEnd: just leave.
+function leave(a, report){
+  if (a.lunchSeat){ a.lunchSeat.plate.visible = false; a.lunchSeat.taken = false; a.lunchSeat = null; }
+  a.busy = true;
+  const out = () => {
+    a.state = 'leave'; a.lookAt = null;
+    const sl = a.slot;
+    walkTo(a, EXIT, () => removeAgent(a));
+    later(1.5, () => { if (sl && sl.desk && !(sl.agent && sl.agent !== a)){ sl.desk.vanish = 1; sl.desk = null; } });
+    refreshSheet(a);
+  };
+  const m = a.data.parent && byId.get(a.data.parent);
+  if (!report || !m || !m.slot || m.busy || a.moving){ out(); return; }
+  m.busy = true;
+  walkTo(a, behind(m), () => {
+    a.lookAt = m; m.lookAt = a;
+    say(a, 'Rapport : ' + report.slice(0, 90), 2.6); setPaper(a, true);
+    later(2.8, () => { setPaper(a, false); say(m, 'Merci, beau travail !', 2); });
+    later(4.8, () => { m.lookAt = null; m.busy = false; out(); });
+  });
+}
+
+/* ---------- ambient life for agents that are waiting for you ---------- */
+const SMALLTALK = ['Quelqu’un a vu mes tokens ? J’en avais plein ce matin.', 'Tu crois qu’on aura des GPU pour Noël ?', 'J’ai rêvé d’un merge sans conflit.', 'Aujourd’hui : octets à la carbonara.', 'Encore un test instable ce matin…', 'Le nouveau café est très asynchrone.', 'Mon contexte déborde, il me faut une sieste.', 'Le CEO ne m’a pas encore répondu.'];
+const REPLIES = ['Haha, trop vrai.', 'Ne m’en parle pas.', 'Pareil !', 'C’est clair.', 'Sérieux ?', 'Je note.'];
+function coffee(a){
+  a.state = 'visit'; a.busy = true;
+  walkTo(a, COFFEE, () => { a.state = 'idle'; later(4, () => backToDesk(a)); });
+}
+function toilet(a){
+  const st = facil.stalls.find(x => !x.busy); if (!st) return;
+  st.busy = true; a.busy = true; a.state = 'visit';
+  walkTo(a, st.front, () => {
+    st.target = 1;
+    later(0.5, () => {
+      a.path = [st.inside.inner[st.inside.inner.length - 1]]; a.dest = st.inside; a.moving = true;
+      a.onArrive = () => { a.state = 'wc'; st.target = 0;
+        later(4.5, () => { st.target = 1;
+          later(0.5, () => walkTo(a, facil.sink, () => { st.target = 0; st.busy = false; a.state = 'wash'; later(2, () => backToDesk(a)); })); }); };
+    });
+  });
+}
+function chatter(members, n, done){
+  let t = 0.4;
+  for (let i = 0; i < n; i++){
+    const sp = members[i % members.length], line = i === 0 || Math.random() < .5 ? pick(SMALLTALK) : pick(REPLIES);
+    later(t, () => { if (byId.has(sp.id)){ say(sp, line, 2.4); sp.lookAt = members[(i + 1) % members.length]; } }); t += 2.7;
+  }
+  later(t, done);
+}
+function lunch(group){
+  let seats = [];
+  for (const tu of [-2.2, 2.2].sort(() => Math.random() - .5)){ const f = dining.seats.filter(x => x.tu === tu && !x.taken); if (f.length >= group.length){ seats = f; break; } }
+  if (!seats.length) return;
+  seats.sort((x, y) => x.v - y.v);
+  let arrived = 0, started = false;
+  const start = () => { if (started) return; started = true;
+    chatter(group, 3 + group.length, () => group.forEach((m, i) => later(i * 0.7, () => {
+      if (m.lunchSeat){ m.lunchSeat.plate.visible = false; m.lunchSeat.taken = false; m.lunchSeat = null; }
+      m.lookAt = null; backToDesk(m); }))); };
+  group.forEach((m, i) => {
+    const st = seats[i]; st.taken = true; m.lunchSeat = st; m.busy = true; m.state = 'visit';
+    walkTo(m, st.loc, () => { m.seated = true; m.state = 'eat'; st.plate.visible = true; if (++arrived === group.length) start(); });
+  });
+  later(25, start);
+}
+function managersMeeting(members){
+  facil.meetBusy = true;
+  let arrived = 0, started = false;
+  const start = () => { if (started) return; started = true;
+    chatter(members, 2 + members.length, () => { facil.meetBusy = false; members.forEach((m, i) => later(i * 0.6, () => { m.lookAt = null; backToDesk(m); })); });
+  };
+  members.forEach((m, i) => { m.busy = true; m.state = 'visit';
+    walkTo(m, facil.meet[i].loc, () => { m.seated = true; m.state = 'meet'; if (++arrived === members.length) start(); }); });
+  later(25, start);
+}
+let nextCoffee = 8, nextWc = 14, nextLunch = 20, nextMeet = 35;
+function tickSim(dt){
+  simT += dt;
+  for (let i = timers.length - 1; i >= 0; i--) if (timers[i].at <= simT){ const t = timers.splice(i, 1)[0]; t.fn(); }
+  agents.forEach(a => { if (a.state === 'work' && a.seated && a.typing && a.data.status !== 'working' && simT > a.typeUntil) a.typing = false; });
+  const free = agents.filter(a => a.state === 'work' && a.seated && !a.busy && !a.moving && a.data.status === 'idle');
+  if ((nextCoffee -= dt) <= 0){ nextCoffee = 14 + Math.random() * 10; const a = pick(free); if (a) coffee(a); }
+  if ((nextWc -= dt) <= 0){ nextWc = 20 + Math.random() * 12; const a = pick(free); if (a) toilet(a); }
+  if ((nextLunch -= dt) <= 0){ nextLunch = 30 + Math.random() * 15;
+    const grp = free.slice().sort(() => Math.random() - .5).slice(0, 4); if (grp.length >= 2) lunch(grp); }
+  if ((nextMeet -= dt) <= 0){ nextMeet = 45 + Math.random() * 20;
+    if (!facil.meetBusy){ const grp = free.slice().sort(() => Math.random() - .5).slice(0, 4); if (grp.length >= 2) managersMeeting(grp); } }
+}
+
+/* ---------- server events → scene ---------- */
+function addAgent(d, animate){
+  if (byId.has(d.id)) return byId.get(d.id);
+  if (!PROJECTS[d.project]) upsertProject({key:d.project, name:d.project.split(/[\\/]/).pop(), color:'#a4a6ca', state:'active', order:999}, false);
+  const a = makeAgent(d);
+  if (animate) arrive(a); else seatAgent(a, findSlot(a.project, a.mgr));
+  return a;
+}
+function applySnapshot(s){
+  s.projects.forEach(p => upsertProject(p, false));
+  s.agents.filter(a => a.kind === 'session').forEach(a => addAgent(a, false));
+  s.agents.filter(a => a.kind !== 'session').forEach(a => addAgent(a, false));
+  (s.journal || []).forEach(addJournal);
+  if (s.digest) renderDigest(s.digest);
+  const first = rooms.find(r => r.project && r.project.state === 'active');
+  if (first) focusRoom(first);
+  refreshStats(); renderLegend();
+}
+function applyEvent(e){
+  switch (e.t){
+    case 'project': upsertProject(e.project, true); break;
+    case 'join': { const a = addAgent(e.agent, true); refreshStats(); renderLegend(); if (sheetProject && a.project === sheetProject) renderSheet(); break; }
+    case 'update': { const a = byId.get(e.agent.id); if (a){ applyData(a, e.agent); refreshSheet(a); refreshStats(); } if (selected === ceo) renderSheet(); break; }
+    case 'tool': { const a = byId.get(e.id); if (!a) break;
+      a.typeUntil = simT + 6;
+      if (a.state === 'work' && a.seated) a.typing = true;
+      if (a === selected) say(a, [e.tool, e.arg ? ' ' + e.arg : ''], 2.2, 'tool');
+      break; }
+    case 'delegate': { const m = byId.get(e.from), s = byId.get(e.to); if (m && s) later(1.5, () => delegate(m, s, e.task)); break; }
+    case 'prompt': { const m = byId.get(e.to); if (m) delegate(ceo, m, e.text); break; }
+    case 'leave': { const a = byId.get(e.id); if (a) leave(a, e.report); break; }
+    case 'requests': refreshStats(); if (selected === ceo) renderSheet(); break;
+    case 'journal': addJournal(e.entry); break;
+    case 'digest': renderDigest(e.digest); break;
+  }
+}
+function connect(){
+  const es = new EventSource('/api/stream?t=' + encodeURIComponent(TOKEN));
+  let first = true;
+  es.addEventListener('snapshot', ev => {
+    if (!first){ location.reload(); return; }       // server restarted: start again from a clean state
+    first = false; setConn(true); applySnapshot(JSON.parse(ev.data));
+  });
+  es.addEventListener('ev', ev => { try { applyEvent(JSON.parse(ev.data)); } catch (err){ console.error(err); } });
+  es.onerror = () => setConn(false);
+  es.onopen = () => setConn(true);
+}
+function setConn(ok){
+  const c = $('#conn'); c.classList.toggle('off', !ok);
+  c.querySelector('span').textContent = ok ? 'en direct' : 'déconnecté';
+}
+
+/* ---------- room signs ---------- */
+const signs = [];
+function signFor(r){
+  (r.signs || [{u:0}]).forEach(sg => {
+    const e = lbl('sign'); e.style.background = r.color;
+    e.addEventListener('click', () => { focusRoom(r, 1.4); if (r.project) openProject(r.project); else if (r.kind === 'ceo') select(ceo); });
+    signs.push({r, e, u:sg.u, text:sg.text});
+  });
+}
+
+/* ---------- per-frame character animation ---------- */
+function animateChar(a, dt){
+  const P = a.P; a.t += dt;
+  if (a.moving && a.path.length){
+    const [tx, tz] = a.path[0], p = a.g.position;
+    const dx = tx - p.x, dz = tz - p.z, dist = Math.hypot(dx, dz), step = 2.6 * dt;
+    if (dist > 0.001) a.g.rotation.y = lerpAngle(a.g.rotation.y, Math.atan2(dx, dz), Math.min(1, dt * 12));
+    if (dist <= step){ p.x = tx; p.z = tz; a.path.shift();
+      if (!a.path.length){ a.moving = false; a.loc = a.dest; a.faceT = a.dest.face; const cb = a.onArrive; a.onArrive = null; cb && cb(); } }
+    else { p.x += dx / dist * step; p.z += dz / dist * step; }
+  } else if (a.moving && !a.path.length) a.moving = false;
+  if (!a.moving && a.faceT != null) a.g.rotation.y = lerpAngle(a.g.rotation.y, a.faceT, Math.min(1, dt * 8));
+  if (!a.moving && a.lookAt){ const q = a.lookAt.g.position, p = a.g.position, yaw = Math.atan2(q.x - p.x, q.z - p.z);
+    if (a.seated){ let d = ((yaw - a.g.rotation.y + Math.PI) % (Math.PI * 2)) - Math.PI; if (d < -Math.PI) d += Math.PI * 2; a.headYaw = lerp(a.headYaw, clamp(d, -1.1, 1.1), dt * 6); }
+    else a.faceT = yaw; }
+  else a.headYaw = lerp(a.headYaw, 0, dt * 5);
+  const k = Math.min(1, dt * 14);
+  let lL = 0, lR = 0, aL = 0, aR = 0, hx = 0, y = 0;
+  if (a.moving){ const s = Math.sin(a.t * 11); lL = s * .6; lR = -s * .6; aL = -s * .5; aR = a.carry ? -0.85 : s * .5; y = Math.abs(Math.cos(a.t * 11)) * .05; }
+  else if (a.seated){
+    lL = lR = -Math.PI / 2; y = -0.14;
+    if (a.typing){ aL = -1.25 + Math.sin(a.t * 21) * .14; aR = -1.25 + Math.sin(a.t * 21 + 1.9) * .14; hx = .14 + Math.sin(a.t * 1.7) * .03; }
+    else if (a.state === 'wait'){ aL = aR = -0.45; hx = -0.05 + Math.sin(a.t * 2) * .04; }
+    else if (a.state === 'eat'){ aL = -0.7; aR = -1.0 + Math.sin(a.t * 4) * .3; }
+    else aL = aR = -0.5;
+    if (a.talking) aR = -0.9 + Math.sin(a.t * 7) * .3;
+  } else {
+    if (a.talking){ aR = -0.7 + Math.sin(a.t * 6) * .35; aL = -0.2; }
+    else if (a.carry) aR = -0.7;
+    else if (a.state === 'wash'){ aL = aR = -1.0 + Math.sin(a.t * 9) * .15; }
+    y = Math.sin(a.t * 2) * .01;
+  }
+  P.legL.rotation.x = lerp(P.legL.rotation.x, lL, k); P.legR.rotation.x = lerp(P.legR.rotation.x, lR, k);
+  P.armL.rotation.x = lerp(P.armL.rotation.x, aL, k); P.armR.rotation.x = lerp(P.armR.rotation.x, aR, k);
+  P.head.rotation.x = lerp(P.head.rotation.x, hx, k); P.head.rotation.y = a.headYaw;
+  a.g.position.y = lerp(a.g.position.y, y, a.moving ? 1 : k);
+}
+
+/* ---------- camera: render resolution follows the zoom so details stay sharp from afar ---------- */
+let frustW = 1;
+function resize(){
+  W = app.clientWidth; H = app.clientHeight;
+  const aspect = W / H, fitH = Math.max(20, 52 / aspect);
+  cam.left = -fitH * aspect / 2; cam.right = fitH * aspect / 2; cam.top = fitH / 2; cam.bottom = -fitH / 2;
+  frustW = fitH * aspect;
+  PX = 0; updatePixelSize(); mResize();
+}
+function updatePixelSize(){
+  const spu = W / (frustW / view.zoom);                   // screen px per world unit
+  const want = clamp(Math.round(spu / 15 * 2) / 2, 1, 4); // keep ~15 render px per world unit
+  if (want === PX) return;
+  PX = want; RW = Math.max(1, Math.ceil(W / PX)); RH = Math.max(1, Math.ceil(H / PX));
+  renderer.setSize(RW, RH, false);
+}
+window.addEventListener('resize', resize);
+function placeCam(){
+  cam.position.set(view.tx + Math.sin(view.angle) * CAM_R, CAM_H, view.tz + Math.cos(view.angle) * CAM_R);
+  cam.lookAt(view.tx, 0, view.tz);
+  cam.zoom = view.zoom;
+  const off = view.offX / PX;
+  if (Math.abs(off) > 0.01) cam.setViewOffset(RW, RH, off, 0, RW, RH); else cam.clearViewOffset();
+  cam.updateProjectionMatrix();
+  walls.forEach(w => { const [nx, nz] = w.userData.n; w.visible = Math.sin(view.angle) * nx + Math.cos(view.angle) * nz > 0.05; });
+  sun.position.set(view.tx + 14, 30, view.tz + 10); sun.target.position.set(view.tx, 0, view.tz);
+}
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function pickAt(x, y){
+  const r = canvas.getBoundingClientRect();
+  ndc.set((x - r.left) / r.width * 2 - 1, -((y - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, cam);
+  const list = []; [ceo, ...agents].forEach(a => a.g.traverse(o => { if (o.isMesh) list.push(o); }));
+  const hit = ray.intersectObjects(list, false)[0];
+  return hit ? hit.object.userData.agent : null;
+}
+let drag = null;
+canvas.addEventListener('pointerdown', e => { drag = {x:e.clientX, y:e.clientY, lx:e.clientX, ly:e.clientY, moved:false, rot:e.shiftKey || e.button === 2}; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('pointermove', e => {
+  if (mode !== 'office') return;
+  if (drag){
+    if (Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) > 5) drag.moved = true;
+    if (drag.moved){
+      const dx = e.clientX - drag.lx, dy = e.clientY - drag.ly; drag.lx = e.clientX; drag.ly = e.clientY;
+      canvas.classList.add('dragging');
+      if (drag.rot) view.target -= dx * 0.008;
+      else {
+        const upp = frustW / view.zoom / W, a = view.angle;
+        view.txT += -Math.cos(a) * dx * upp - Math.sin(a) * dy * upp / SIN_E;
+        view.tzT += Math.sin(a) * dx * upp - Math.cos(a) * dy * upp / SIN_E;
+        view.txT = clamp(view.txT, -8, nCols * MOD_W + 8); view.tzT = clamp(view.tzT, -12, 12);
+        view.tx = view.txT; view.tz = view.tzT; view.follow = null;
+      }
+    }
+    return;
+  }
+  const a = pickAt(e.clientX, e.clientY);
+  if (a !== hovered){ hovered = a; canvas.classList.toggle('hovering', !!a); }
+});
+canvas.addEventListener('pointerup', e => {
+  canvas.classList.remove('dragging');
+  if (drag && !drag.moved && mode === 'office') select(pickAt(e.clientX, e.clientY));
+  drag = null;
+});
+canvas.addEventListener('pointerleave', () => { hovered = null; canvas.classList.remove('hovering'); });
+canvas.addEventListener('wheel', e => { e.preventDefault(); view.zoomT = clamp(view.zoomT * (e.deltaY > 0 ? 0.88 : 1.12), 0.6, 4); }, {passive:false});
+$('#rot-l').onclick = () => view.target += Math.PI / 2;
+$('#rot-r').onclick = () => view.target -= Math.PI / 2;
+$('#zoom-in').onclick = () => view.zoomT = clamp(view.zoomT * 1.25, 0.6, 4);
+$('#zoom-out').onclick = () => view.zoomT = clamp(view.zoomT / 1.25, 0.6, 4);
+$('#names').onchange = e => showNames = e.target.checked;
+window.addEventListener('keydown', e => { if (e.target && e.target.closest && e.target.closest('input,button,summary')) return; if (e.key === 'q') view.target += Math.PI / 2; if (e.key === 'e') view.target -= Math.PI / 2; });
+const ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.56, 12), new THREE.MeshBasicMaterial({color:0xffcf5a, side:THREE.DoubleSide}));
+ring.rotation.x = -Math.PI / 2; ring.position.y = 0.04; ring.visible = false; scene.add(ring);
+function select(a){
+  if (view.follow !== a) view.follow = null;
+  selected = a; sheetProject = null;
+  document.body.classList.toggle('sheet-open', !!a);
+  $('#sheet').hidden = !a;
+  if (a) renderSheet();
+}
+function openProject(p){
+  selected = null; sheetProject = p;
+  document.body.classList.add('sheet-open'); $('#sheet').hidden = false; renderSheet();
+}
+
+/* ---------- HUD ---------- */
+function portrait(a){
+  const c = document.createElement('canvas'); c.width = 16; c.height = 16; const g = c.getContext('2d');
+  const L = a.look, bg = a.isCeo ? '#ffcf5a' : a.project.color;
+  g.fillStyle = shade(bg, .55); g.fillRect(0, 0, 16, 16);
+  g.fillStyle = L.shirt; g.fillRect(3, 12, 10, 4);
+  g.fillStyle = L.skin; g.fillRect(4, 3, 8, 8); g.fillRect(7, 11, 2, 1);
+  const hat = L.hair === 'cap' || L.hair === 'beanie';
+  g.fillStyle = hat ? L.accC : L.hairC; g.fillRect(4, 2, 8, 2); if (!hat){ g.fillRect(3, 3, 1, 4); g.fillRect(12, 3, 1, 4); }
+  if (L.hair === 'long'){ g.fillRect(3, 3, 1, 8); g.fillRect(12, 3, 1, 8); }
+  if (L.hair === 'bun' || L.hair === 'beanie') g.fillRect(7, 0, 2, 2);
+  if (L.hair === 'cap') g.fillRect(4, 4, 9, 1);
+  g.fillStyle = '#1b1a26'; g.fillRect(6, 6, 1, 2); g.fillRect(9, 6, 1, 2);
+  if (L.acc.includes('glasses')){ g.fillStyle = '#20202c'; g.fillRect(5, 6, 3, 1); g.fillRect(8, 6, 3, 1); g.fillStyle = '#bfe3ff'; g.fillRect(6, 7, 1, 1); g.fillRect(9, 7, 1, 1); }
+  if (L.acc.includes('goggles')){ g.fillStyle = '#7ff0d0'; g.fillRect(5, 6, 2, 2); g.fillRect(9, 6, 2, 2); }
+  if (L.acc.includes('headset')){ g.fillStyle = '#2a2a38'; g.fillRect(3, 1, 10, 1); g.fillRect(2, 6, 2, 3); g.fillRect(12, 6, 2, 3); }
+  if (L.acc.includes('tie')){ g.fillStyle = '#eeedf7'; g.fillRect(7, 12, 2, 4); g.fillStyle = L.accC; g.fillRect(7, 13, 2, 3); }
+  g.fillStyle = shade(L.skin, .72); g.fillRect(7, 9, 2, 1);
+  return c;
+}
+function statusOf(a){
+  if (a.isCeo) return a.atDesk ? ['idle', 'Supervise ' + agents.length + ' agent' + (agents.length > 1 ? 's' : '')] : ['move', 'Va porter ta consigne'];
+  if (a.state === 'enter') return ['move', 'Arrive au bureau'];
+  if (a.state === 'leave') return ['move', 'Mission terminée, quitte le bureau'];
+  if (a.request) return ['wait', 'Attend ta validation'];
+  if (a.carry) return ['move', 'Porte une consigne'];
+  if (a.state === 'meet') return ['talk', 'En réunion'];
+  if (a.state === 'eat') return ['idle', 'À la cantine (attend ta réponse)'];
+  if (a.state === 'wc' || a.state === 'wash' || a.state === 'idle') return ['idle', 'En pause (attend ta réponse)'];
+  if (a.state === 'talk') return ['talk', 'En discussion'];
+  if (a.state === 'visit') return ['move', 'Se déplace'];
+  if (a.data.status === 'working') return ['work', 'Au travail'];
+  return ['idle', a.mgr ? 'Attend ta réponse' : 'En attente'];
+}
+const reqBlock = x => '<div class="req"><p><b>' + esc(x.name) + '</b> (' + esc(x.project.name) + ') : ' + esc(x.request.text) + '</p>' +
+  (x.request.canAnswer ? '<div class="row"><button class="btn ok" data-ok="' + esc(x.request.id) + '">Valider</button><button class="btn" data-no="' + esc(x.request.id) + '">Refuser</button></div>'
+    : '<p class="empty">Réponds dans ta fenêtre Claude Code. (Pour répondre d’ici : <code>npm run hooks:install-approvals</code>.)</p>') + '</div>';
+const agentLink = x => '<button class="link" data-sel="' + esc(x.id) + '">' + esc(x.name) + '</button>';
+const stateLabel = p => p.state === 'paused' ? 'en pause' : p.isNew ? 'nouveau' : 'actif';
+const launchForm = p => '<div class="sec"><h3>Lancer une session</h3><form class="give" id="give" data-project="' + esc(p.key) + '"><input id="give-task" type="text" maxlength="400" autocomplete="off" placeholder="Ex. : ajoute un mode sombre" aria-label="Consigne pour une nouvelle session dans ' + esc(p.name) + '"><button class="btn gold" type="submit">Lancer</button></form>' +
+  '<p class="empty" id="give-help">Démarre une nouvelle session Claude Code (<code>claude -p</code>) dans ce projet. Le CEO ira porter la consigne au nouveau manager.</p></div>';
+function sinceText(ts){ if (!ts) return ''; const s = Math.max(0, Math.round((Date.now() - ts) / 1000)); return s < 60 ? 'il y a ' + s + ' s' : 'il y a ' + ago(ts); }
+
+function renderSheet(){
+  const s = $('#sheet'), a = selected, p = sheetProject;
+  if (!a && !p) return;
+  let html = '';
+  if (p){
+    const team = agents.filter(x => x.project === p), mgrs = team.filter(x => x.mgr), n = roomsOf(p).length;
+    html += '<div class="sh-head"><span class="swatch" style="background:' + p.color + '"></span><div><h2>' + esc(p.name) + '</h2><p>' + esc(p.key) + '</p></div><button class="btn close" id="sh-close" aria-label="Fermer la fiche">✕</button></div>';
+    html += '<span class="status ' + (p.state === 'paused' ? 'idle' : 'work') + '"><i class="dot" style="background:currentColor"></i>' + (p.state === 'paused' ? 'En pause depuis ' + ago(p.lastActive) : 'Actif · ' + n + ' pièce' + (n > 1 ? 's' : '')) + '</span>';
+    html += '<div class="sec"><h3>Équipe</h3><dl class="kv"><dt>Manager' + (mgrs.length > 1 ? 's' : '') + '</dt><dd>' + (mgrs.map(agentLink).join(', ') || '—') + '</dd><dt>Agents</dt><dd>' + (team.filter(x => !x.mgr).map(agentLink).join(', ') || '—') + '</dd></dl></div>';
+    const reqs = team.filter(x => x.request); if (reqs.length) html += '<div class="sec"><h3>Demandes en attente</h3>' + reqs.map(reqBlock).join('') + '</div>';
+    const ev = journal.filter(e => e.project === p.key && e.level >= 2).slice(-5).reverse();
+    html += '<div class="sec"><h3>Derniers faits marquants</h3>' + (ev.length ? '<div class="convo">' + ev.map(e => '<div class="msg"><b>' + esc(e.who) + '</b> ' + esc(e.text) + ' <span class="empty">· ' + sinceText(e.ts) + '</span></div>').join('') + '</div>' : '<p class="empty">Rien de notable depuis que l’app est ouverte.</p>') + '</div>';
+    html += launchForm(p);
+  } else {
+    const [cls, label] = statusOf(a), d = a.data || {};
+    const sub = a.isCeo ? 'CEO · opérateur humain' : (a.mgr ? 'Manager de ' + a.project.name : ROLES[a.role].label + (d.agentType ? ' · ' + d.agentType : '')) + (d.model ? ' · ' + d.model : '');
+    html += '<div class="sh-head"><span id="pt"></span><div><h2>' + esc(a.name) + '</h2><p>' + esc(sub) + '</p></div><button class="btn close" id="sh-close" aria-label="Fermer la fiche">✕</button></div>' +
+      '<div class="strow"><span class="status ' + cls + '"><i class="dot" style="background:currentColor"></i>' + esc(label) + '</span><button class="btn" id="follow" type="button">' + (view.follow === a ? 'Ne plus suivre' : 'Suivre') + '</button></div>';
+    if (a.isCeo){
+      const reqs = agents.filter(x => x.request);
+      html += '<div class="sec"><h3>Demandes en attente</h3>' + (reqs.length ? reqs.map(reqBlock).join('') : '<p class="empty">Aucune demande en attente.</p>') + '</div>';
+      const list = Object.values(PROJECTS).sort((x, y) => (x.state === 'active' ? 0 : 1) - (y.state === 'active' ? 0 : 1) || (y.lastActive || 0) - (x.lastActive || 0));
+      html += '<div class="sec"><h3>Projets</h3>' + (list.length ? '<dl class="kv">' + list.map(q => '<dt>' + esc(q.name) + '</dt><dd>' + stateLabel(q) + ' · ' + agents.filter(x => x.project === q).length + ' agents</dd>').join('') + '</dl>' : '<p class="empty">Aucun projet Claude Code trouvé pour l’instant.</p>') + '</div>';
+    } else {
+      html += '<div class="sec"><h3>Travaille sur</h3><p class="task">' + esc(d.task || '—') + '</p>' +
+        (d.lastTool ? '<div class="meta"><span>Dernier outil : ' + esc(d.lastTool.tool) + (d.lastTool.arg ? ' ' + esc(d.lastTool.arg) : '') + '</span><span>' + sinceText(d.lastTool.ts) + '</span></div>' : '') + '</div>';
+      if (a.request) html += reqBlock(a);
+      const used = (d.tools && d.tools.used) || {}, allowed = d.tools && d.tools.allowed;
+      const names = allowed ? Array.from(new Set(ALL_TOOLS.concat(allowed, Object.keys(used)))) : Object.keys(used).sort((x, y) => used[y] - used[x]);
+      html += '<div class="sec"><h3>Outils' + (d.tools && d.tools.ro ? '<span class="ro">lecture seule</span>' : '') + '</h3>' +
+        (names.length ? '<div class="tools">' + names.map(t => '<span class="tool' + (allowed && !allowed.includes(t) ? ' off' : '') + (t.startsWith('mcp__') ? ' mcp' : '') + '">' + esc(t.replace(/^mcp__/, 'mcp · ').replace(/__/g, ' · ')) + (used[t] ? ' ×' + used[t] : '') + '</span>').join('') + '</div>' : '') +
+        (allowed ? '' : '<p class="empty">' + (names.length ? 'Outils utilisés jusqu’ici. ' : '') + 'Accès : tous les outils autorisés par tes réglages Claude Code.</p>') + '</div>';
+      const ch = d.changes || [];
+      html += '<div class="sec"><h3>Derniers changements</h3>' + (ch.length ? '<ul class="changes">' + ch.map(c =>
+        '<li><span>' + esc(c.file) + '</span><span><span class="add">+' + c.add + '</span>' + (c.del ? ' <span class="del">−' + c.del + '</span>' : '') + '</span><time>' + new Date(c.ts).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'}) + '</time></li>').join('') + '</ul>'
+        : '<p class="empty">' + (d.tools && d.tools.ro ? 'Agent en lecture seule : il ne modifie aucun fichier.' : 'Pas encore de modification.') + '</p>') + '</div>';
+      const cv = d.convo || [];
+      html += '<div class="sec"><h3>Échanges</h3>' + (cv.length ? '<div class="convo">' + cv.slice(0, 4).map(m =>
+        '<div class="msg' + (m.me ? ' me' : '') + '"><b>' + (m.me ? esc(a.name) + ' → ' + esc(m.with) : esc(m.with) + ' → ' + esc(a.name)) + '</b> · ' + esc(m.text) + '</div>').join('') + '</div>'
+        : '<p class="empty">Aucun échange pour l’instant.</p>') + '</div>';
+      const kids = agents.filter(x => x.data.parent === a.id), parent = byId.get(d.parent);
+      html += '<div class="sec"><h3>Session</h3><dl class="kv"><dt>Type</dt><dd>' + (a.mgr ? 'Session principale' : 'Sous-agent') + '</dd>' +
+        (parent ? '<dt>Manager</dt><dd>' + agentLink(parent) + '</dd>' : '') +
+        (kids.length ? '<dt>Sous-agents</dt><dd>' + kids.map(agentLink).join(', ') + '</dd>' : '') +
+        '<dt>Actif depuis</dt><dd>' + ago(d.started) + '</dd></dl></div>';
+      if (a.mgr) html += launchForm(a.project);
+    }
+  }
+  const prev = s.querySelector('#give-task'), keep = prev && s._for === (a || p) ? {v:prev.value, f:document.activeElement === prev, c:prev.selectionStart} : null;
+  const scroll = s._for === (a || p) ? s.scrollTop : 0;
+  s.innerHTML = html; s._for = a || p; s.scrollTop = scroll;
+  const nin = s.querySelector('#give-task');
+  if (keep && nin){ nin.value = keep.v; if (keep.f){ nin.focus(); try { nin.setSelectionRange(keep.c, keep.c); } catch (e) {} } }
+  const form = s.querySelector('#give');
+  if (form) form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const text = nin.value.trim(); if (!text) return;
+    const help = s.querySelector('#give-help'), btn = form.querySelector('button');
+    btn.disabled = true;
+    try { await api('/api/launch', {project:form.dataset.project, prompt:text}); nin.value = ''; help.className = 'empty'; help.textContent = 'Session lancée. Elle apparaîtra dans quelques secondes.'; }
+    catch (err){ help.className = 'give-msg'; help.textContent = 'Impossible de lancer la session : ' + err.message; }
+    btn.disabled = false;
+  });
+  const fb = s.querySelector('#follow'); if (fb) fb.onclick = () => { view.follow = view.follow === a ? null : a; if (view.follow) view.zoomT = Math.max(view.zoomT, 1.6); renderSheet(); };
+  const pt = s.querySelector('#pt'); if (pt) pt.replaceWith(portrait(a));
+  s.querySelector('#sh-close').onclick = () => select(null);
+  const answer = async (id, allow) => { try { const r = await api('/api/answer', {id, allow}); if (!r.ok) alertSheet('Cette demande a expiré : réponds dans Claude Code.'); } catch (err){ alertSheet(err.message); } };
+  s.querySelectorAll('[data-ok]').forEach(b => b.onclick = () => answer(b.dataset.ok, true));
+  s.querySelectorAll('[data-no]').forEach(b => b.onclick = () => answer(b.dataset.no, false));
+  s.querySelectorAll('[data-sel]').forEach(b => b.onclick = () => select(byId.get(b.dataset.sel)));
+}
+function alertSheet(text){ const p = document.createElement('p'); p.className = 'give-msg'; p.textContent = text; $('#sheet').prepend(p); }
+function renderLegend(){
+  const list = Object.values(PROJECTS).sort((x, y) => (x.state === 'active' ? 0 : 1) - (y.state === 'active' ? 0 : 1) || (y.lastActive || 0) - (x.lastActive || 0));
+  $('#proj-list').innerHTML = (list.length ? list.map(p => '<button class="proj" data-p="' + esc(p.key) + '"><i style="background:' + p.color + '"></i><span title="' + esc(p.key) + '">' + esc(p.name) + '</span><span class="pill ' + (p.state === 'paused' ? 'paused' : p.isNew ? 'new' : 'active') + '">' + (p.state === 'paused' ? ago(p.lastActive) : stateLabel(p)) + '</span><b>' + agents.filter(a => a.project === p).length + '</b></button>').join('')
+    : '<p class="hint">Aucun projet pour l’instant. Ouvre une session Claude Code : sa pièce apparaîtra ici.</p>') +
+    '<button class="proj" data-p="__ceo"><i style="background:#ffcf5a"></i><span>bureau du CEO</span><span></span><b>1</b></button>';
+  $('#proj-list').querySelectorAll('[data-p]').forEach(b => b.onclick = () => {
+    if (b.dataset.p === '__ceo'){ focusRoom(ceoRoom, 1.4); select(ceo); return; }
+    const p = PROJECTS[b.dataset.p]; focusRoom(roomsOf(p)[0], 1.4); openProject(p);
+  });
+}
+function refreshStats(){
+  $('#st-active').textContent = agents.length;
+  const all = Object.values(PROJECTS);
+  $('#st-proj').textContent = all.filter(p => p.state === 'active').length + '/' + all.length;
+  const w = agents.filter(a => a.request).length; $('#st-wait').textContent = w;
+  $('#st-wait-chip').style.opacity = w ? 1 : .5;
+}
+function addJournal(e){
+  journal.push(e); if (journal.length > 400) journal.shift();
+  if (e.level < 1 && !$('#feed-all').checked) return;
+  const li = document.createElement('li');
+  const color = e.role === 'ceo' ? '#ffcf5a' : (ROLES[e.role] || ROLES.back).shirt;
+  const proj = e.project && PROJECTS[e.project] ? ' <span class="empty">· ' + esc(PROJECTS[e.project].name) + '</span>' : '';
+  li.innerHTML = '<time>' + new Date(e.ts).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit', second:'2-digit'}) + '</time><div title="' + esc(e.text) + '"><span style="color:' + color + ';font-weight:600">' + esc(e.who) + '</span> ' + esc(e.text) + proj + '</div>';
+  const f = $('#feed'); f.prepend(li); while (f.children.length > 80) f.lastChild.remove();
+  $('#log-n').textContent = journal.length;
+}
+function renderDigest(d){
+  const by = $('#dg-by');
+  by.textContent = (d.by === 'local' ? 'résumé local' + (d.error ? ' (Haiku : ' + d.error + ')' : '') : 'résumé par ' + d.by) + ' · ' + new Date(d.at).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
+  const color = name => { const p = Object.values(PROJECTS).find(x => x.name === name); return p ? p.color : '#a4a6ca'; };
+  $('#digest').innerHTML = d.items.map(i => '<li class="' + (i.urgent ? 'hi' : '') + '"><i style="background:' + (i.urgent ? '#ff8f5e' : color(i.project)) + '"></i><span>' + (i.project ? '<b>' + esc(i.project) + '</b> : ' : '') + esc(i.text) + '</span></li>').join('');
+}
+{ const g = $('#logo').getContext('2d');
+  [['#ffcf5a', 0, 0, 8, 8], ['#14152a', 1, 1, 6, 6], ['#4fc3b8', 2, 2, 4, 3], ['#ffcf5a', 1, 6, 6, 1], ['#eeedf7', 3, 3, 1, 1]].forEach(([c, x, y, w, h]) => { g.fillStyle = c; g.fillRect(x, y, w, h); }); }
+
+/* ---------- characters lineup ---------- */
+const mScene = new THREE.Scene();
+const mCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
+mScene.add(new THREE.HemisphereLight(0xe8f2ff, 0x5e6b45, 0.75));
+const mSun = new THREE.DirectionalLight(0xfff0d6, 0.7); mSun.position.set(4, 10, 8); mSun.castShadow = true;
+Object.assign(mSun.shadow.camera, {left:-12, right:12, top:6, bottom:-6}); mSun.shadow.mapSize.set(1024, 512); mScene.add(mSun);
+const LINEUP = [['ceo', 'Toi'], ['lead', 's:demo'], ['explore', 'a:1'], ['plan', 'a:2'], ['review', 'a:3'], ['front', 'a:4'], ['test', 'a:5'], ['back', 'a:6'], ['docs', 'a:7']];
+const mChars = [], mLabels = [];
+box(mScene, 80, 0.1, 400, '#6fa257', 0, -0.05, -180, {noCast:true});
+box(mScene, LINEUP.length * 1.5 + 1, 0.3, 2.4, '#e3dfec', 0, 0.15, 0, {noCast:true});
+LINEUP.forEach(([role, name], i) => {
+  const x = (i - (LINEUP.length - 1) / 2) * 1.5;
+  const look = role === 'ceo' ? ceo.look : lookFor(role, hashStr(name));
+  box(mScene, 1.1, 0.24, 1.1, shade(ROLES[role].shirt, .7), x, 0.42, 0);
+  const {g, P} = makeChar(look); g.position.set(x, 0.54, 0); mScene.add(g);
+  mChars.push({g, P, t:i});
+  const HINT = {ceo:'toi', lead:'session principale', explore:'agent Explore', plan:'agent Plan', review:'relecture, audit', front:'interface', test:'tests, QA', back:'polyvalent', docs:'documentation'};
+  const e = lbl('mlabel'); setLabel(e, esc(ROLES[role].label) + '<small>' + HINT[role] + '</small>');
+  mLabels.push({e, x});
+});
+function mResize(){
+  const aspect = W / H, fitW = LINEUP.length * 1.5 + 1.2, fitH = Math.max(fitW / aspect, 5.2);
+  mCam.left = -fitH * aspect / 2; mCam.right = fitH * aspect / 2; mCam.top = fitH / 2 + 0.8; mCam.bottom = -fitH / 2 + 0.8;
+  mCam.position.set(0, 3.8, 14); mCam.lookAt(0, 1.1, 0); mCam.updateProjectionMatrix();
+}
+
+/* ---------- labels: priority-based placement so nothing overlaps ---------- */
+const tmp = new THREE.Vector3();
+function toScreen(x, y, z, camera){ tmp.set(x, y, z).project(camera); return [(tmp.x * .5 + .5) * W, (-tmp.y * .5 + .5) * H]; }
+function layout(items){
+  items.sort((a, b) => b.prio - a.prio);
+  const placed = [];
+  for (const it of items){
+    const e = it.el, w = e._w || 40, h = e._h || 20;
+    if (it.x < -80 || it.x > W + 80 || it.y < -40 || it.y > H + 80){ e.hidden = true; continue; }
+    let left = it.x - w / 2, top = it.y - h, ok = false;
+    for (let k = 0; k < 6; k++){
+      const hit = placed.find(r => left < r.r + 4 && left + w > r.l - 4 && top < r.b + 3 && top + h > r.t - 3);
+      if (!hit){ ok = true; break; }
+      top = hit.t - h - 4;
+    }
+    if (it.optional && (!ok || it.y - h - top > 70)){ e.hidden = true; continue; }
+    e.hidden = false; placed.push({l:left, r:left + w, t:top, b:top + h});
+    e.style.transform = 'translate(' + Math.round(left) + 'px,' + Math.round(top) + 'px)';
+  }
+}
+function updateLabels(){
+  const items = [];
+  rooms.forEach(r => { if (!r.sign && r.drop >= 1){ signFor(r); r.sign = true; } });
+  signs.forEach(({r, e, u, text}) => {
+    const p = r.project;
+    const txt = p ? esc(p.name) + (r.annex ? ' · annexe' : '') + '<small>' + (p.state === 'paused' ? 'en pause · ' + ago(p.lastActive) : agents.filter(a => a.slot && a.slot.room === r).length + ' agent' + (agents.filter(a => a.slot && a.slot.room === r).length > 1 ? 's' : '')) + '</small>'
+      : text || (r.kind === 'ceo' ? 'BUREAU DU CEO' : 'ACCUEIL · CAFÉT’');
+    setLabel(e, txt, 'sign' + (p && p.state === 'paused' ? ' paused' : ''));
+    const zBack = r.s * (CW + MOD_D), zFront = r.s * CW, sa = Math.sin(view.angle), ca = Math.cos(view.angle);
+    const backFar = (zBack - zFront) * ca < 0;      // the far edge of the room seen from the camera
+    const [sx, sy] = toScreen(r.cx + u + sa * 0, backFar ? 2.9 : 2.2, backFar ? zBack : zFront, cam);
+    items.push({el:e, x:sx, y:sy, prio:100});
+  });
+  [ceo, ...agents].forEach(a => {
+    const p = a.g.position, top = a.seated ? 1.72 : 1.92;
+    const [sx, sy] = toScreen(p.x, p.y + top, p.z, cam);
+    const sel = a === selected, showTag = showNames || a === hovered || sel;
+    if (showTag){ setLabel(a.tagEl, esc(a.name) + '<em>' + esc(a.isCeo ? 'CEO' : ROLES[a.role].label) + '</em>', 'tag' + (sel ? ' sel' : '')); items.push({el:a.tagEl, x:sx, y:sy - 2, prio:sel ? 98 : a === hovered ? 70 : 30, optional:!sel && a !== hovered}); }
+    else a.tagEl.hidden = true;
+    const talking = a.bubbleUntil > simT;
+    if (talking) items.push({el:a.bubbleEl, x:sx, y:sy - (showTag ? 26 : 4), prio:sel ? 97 : 60, optional:!sel});
+    else a.bubbleEl.hidden = true;
+    if (a.request && !talking) items.push({el:a.alertEl, x:sx, y:sy - (showTag ? 26 : 4), prio:90});
+    else a.alertEl.hidden = true;
+  });
+  layout(items);
+}
+
+/* ---------- tabs ---------- */
+let mode = 'office';
+function setMode(m){
+  mode = m; document.body.classList.toggle('models', m === 'models');
+  $('#tab-office').classList.toggle('on', m === 'office'); $('#tab-models').classList.toggle('on', m === 'models');
+  $('#tab-office').setAttribute('aria-selected', m === 'office'); $('#tab-models').setAttribute('aria-selected', m === 'models');
+  [ceo, ...agents].forEach(a => { a.tagEl.hidden = a.bubbleEl.hidden = a.alertEl.hidden = true; });
+  signs.forEach(s => s.e.hidden = m !== 'office');
+  mLabels.forEach(l => l.e.hidden = m !== 'models');
+}
+$('#tab-office').onclick = () => setMode('office');
+$('#tab-models').onclick = () => setMode('models');
+
+/* ---------- main loop ---------- */
+let last = performance.now(), screenAcc = 0;
+function frame(now){
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  tickSim(dt);
+  view.angle = lerp(view.angle, view.target, Math.min(1, dt * 8));
+  view.zoom = lerp(view.zoom, view.zoomT, Math.min(1, dt * 8));
+  view.tx = lerp(view.tx, view.txT, Math.min(1, dt * 4)); view.tz = lerp(view.tz, view.tzT, Math.min(1, dt * 4));
+  view.offX = lerp(view.offX, (document.body.classList.contains('sheet-open') && W > 860) ? 190 : 0, Math.min(1, dt * 6));
+  updatePixelSize();
+  door.target = (simT < door.forceUntil || [ceo, ...agents].some(a => a.moving && Math.abs(a.g.position.z) < 1.3 && a.g.position.x > -0.6 && a.g.position.x < 2.4)) ? 1 : 0;
+  rooms.forEach(r => r.stalls && r.stalls.forEach(st => { st.open = lerp(st.open, st.target, Math.min(1, dt * 8)); st.pivot.rotation.y = st.open * r.s * 1.3; }));
+  if (view.follow){ view.txT = view.follow.g.position.x; view.tzT = view.follow.g.position.z; }
+  door.open = lerp(door.open, door.target, Math.min(1, dt * 6)); if (door.pivot) door.pivot.rotation.y = door.open * Math.PI * 0.46;
+  rooms.forEach(r => {
+    if (r.drop < 1){
+      r.drop = Math.min(1, r.drop + dt * 1.2);
+      const t = r.drop, y = 14 * Math.pow(1 - t, 3);
+      r.g.position.y = y;
+      const ci = cols[r.col]; if (ci.dropWith === r) ci.g.position.y = y;
+      if (r.drop >= 1){ r.g.position.y = 0; if (ci.dropWith === r){ ci.g.position.y = 0; ci.dropWith = null; }
+        [[-5, 1], [5, 1], [-5, 9], [5, 9], [0, 9]].forEach(([u, v]) => poof(r.cx + u, 0.2, r.s * v, r.color, 7)); }
+    }
+    if (r.dim !== r.dimT || r.flicker > 0){
+      r.flicker = Math.max(0, r.flicker - dt);
+      r.dim = r.flicker > 0 ? (Math.floor(r.flicker * 12) % 2 ? 1 : 0.55) : lerp(r.dim, r.dimT, Math.min(1, dt * 4));
+      if (!r.flicker && Math.abs(r.dim - r.dimT) < 0.01) r.dim = r.dimT;
+      applyDim(r);
+    }
+  });
+  agents.forEach(a => animateChar(a, dt));
+  if (ceo.atDesk){ ceo.seated = true; ceo.typing = !ceo.lookAt && !ceo.talking; }
+  animateChar(ceo, dt);
+  screenAcc += dt; const doScreens = screenAcc > 0.22; if (doScreens) screenAcc = 0;
+  for (let i = desks.length - 1; i >= 0; i--){ const d = desks[i]; if (d.vanish == null) continue;
+    d.vanish -= dt * 2.5; const k = Math.max(0.001, d.vanish); d.g.scale.set(k, k, k);
+    if (d.vanish <= 0){ d.g.parent.remove(d.g); const r = d.slot.room; r.screens.splice(r.screens.indexOf(d.scrMat), 1); desks.splice(i, 1); } }
+  desks.forEach(d => {
+    if (d.vanish != null) return;
+    if (d.appear < 1){ d.appear = Math.min(1, d.appear + dt * 2.2); const t = d.appear, s = t * (1 + Math.sin(t * Math.PI) * 0.25 * (1 - t)); d.g.scale.set(s, s, s); }
+    if (doScreens){ const ag = d.slot.agent, typing = ag && ag.typing && !ag.moving;
+      if (typing){ d.lines.push(newLine()); if (d.lines.length > 6) d.lines.shift(); drawScreen(d, true); } }
+  });
+  cars.forEach(c => { c.g.position.x += c.dir * c.speed * dt; if (c.g.position.x > 120) c.g.position.x = -60; if (c.g.position.x < -60) c.g.position.x = 120; });
+  for (let i = poofs.length - 1; i >= 0; i--){ const f = poofs[i]; f.life -= dt; f.v[1] -= 9 * dt;
+    f.m.position.x += f.v[0] * dt; f.m.position.y = Math.max(0.05, f.m.position.y + f.v[1] * dt); f.m.position.z += f.v[2] * dt;
+    f.m.scale.setScalar(Math.max(0.001, 0.16 * f.life / 0.8)); if (f.life <= 0){ scene.remove(f.m); poofs.splice(i, 1); } }
+  if (selected){ ring.visible = true; ring.position.x = selected.g.position.x; ring.position.z = selected.g.position.z; ring.scale.setScalar(1 + Math.sin(now / 200) * 0.06); }
+  else ring.visible = false;
+  if (mode === 'office'){ placeCam(); renderer.render(scene, cam); updateLabels(); }
+  else {
+    mChars.forEach((c, i) => { c.t += dt; c.g.rotation.y = reduceMotion ? 0.4 : Math.sin(c.t * 0.6) * 0.9;
+      c.P.armR.rotation.x = Math.sin(c.t * 2) * 0.15; c.P.armL.rotation.x = -Math.sin(c.t * 2) * 0.15; c.P.head.rotation.y = Math.sin(c.t * 0.9 + i) * 0.2; });
+    renderer.render(mScene, mCam);
+    mLabels.forEach(l => { const [sx, sy] = toScreen(l.x, 0.2, 1.4, mCam); l.e.style.transform = 'translate(' + Math.round(sx - (l.e._w || 60) / 2) + 'px,' + Math.round(sy) + 'px)'; });
+  }
+  requestAnimationFrame(frame);
+}
+
+resize(); renderLegend(); refreshStats();
+mLabels.forEach(l => l.e.hidden = true);
+connect();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
